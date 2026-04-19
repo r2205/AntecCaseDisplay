@@ -1,0 +1,275 @@
+<Window x:Class="AntecCaseDisplay.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:AntecCaseDisplay"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        Title="AntecCaseDisplay — Settings"
+        Width="780" Height="720" MinWidth="640" MinHeight="560"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}"
+        TextOptions.TextFormattingMode="Display"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+        </Style>
+        <Style TargetType="Label">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+        </Style>
+        <Style TargetType="GroupBox">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="MinWidth" Value="90"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+        </Style>
+        <Style x:Key="HintText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource MutedForegroundBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,2,0,0"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel Margin="14">
+
+        <!-- live status bar -->
+        <Border DockPanel.Dock="Top" Padding="10" Margin="0,0,0,12"
+                Background="{DynamicResource PanelBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="HWiNFO:" FontWeight="Bold" Margin="0,0,4,0"/>
+                <TextBlock x:Name="HwInfoStatusText" Text="..." Margin="0,0,18,0"/>
+                <TextBlock Text="Display:" FontWeight="Bold" Margin="0,0,4,0"/>
+                <TextBlock x:Name="DisplayStatusText" Text="..." Margin="0,0,18,0"/>
+                <TextBlock Text="CPU:" FontWeight="Bold" Margin="0,0,4,0"/>
+                <TextBlock x:Name="LiveCpuText" Text="--" Margin="0,0,18,0"/>
+                <TextBlock Text="GPU:" FontWeight="Bold" Margin="0,0,4,0"/>
+                <TextBlock x:Name="LiveGpuText" Text="--"/>
+            </StackPanel>
+        </Border>
+
+        <!-- bottom buttons -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <TextBlock x:Name="ErrorText" DockPanel.Dock="Left"
+                       Foreground="{DynamicResource BadBrush}" VerticalAlignment="Center"
+                       TextWrapping="Wrap" MaxWidth="380"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Refresh sensors" Click="OnRefreshSensorsClicked"/>
+                <Button Content="Cancel" Click="OnCancelClicked"/>
+                <Button Content="Apply" Click="OnApplyClicked"/>
+                <Button Content="Save &amp; Close" Click="OnSaveCloseClicked" FontWeight="Bold"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- main scrollable settings area -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+
+                <!-- CPU slot -->
+                <GroupBox Header="CPU display slot">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Label Grid.Row="0" Grid.Column="0" Content="Sensor type:"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CpuTypeCombo"
+                                  SelectionChanged="OnCpuTypeChanged"/>
+
+                        <Label Grid.Row="1" Grid.Column="0" Content="Sensor:"/>
+                        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="CpuSensorCombo"
+                                  IsEditable="False" SelectionChanged="OnCpuSensorPicked"/>
+
+                        <Label Grid.Row="2" Grid.Column="0" Content="Pattern (regex):"/>
+                        <StackPanel Grid.Row="2" Grid.Column="1">
+                            <TextBox x:Name="CpuPatternBox" />
+                            <TextBlock Style="{StaticResource HintText}"
+                                       Text="Picking a sensor above fills this in. Edit to match multiple sensors. Case-insensitive regex matched against OriginalName / UserName."/>
+                        </StackPanel>
+
+                        <Label Grid.Row="3" Grid.Column="0" Content="Aggregation:"/>
+                        <ComboBox Grid.Row="3" Grid.Column="1" x:Name="CpuAggCombo"/>
+
+                        <Label Grid.Row="4" Grid.Column="0" Content="Scale:"/>
+                        <StackPanel Grid.Row="4" Grid.Column="1">
+                            <TextBox x:Name="CpuScaleBox"/>
+                            <TextBlock Style="{StaticResource HintText}"
+                                       Text="Multiplier applied to the value before sending. Use 0.01 to fit RPM into 0-99 range, 1 for plain temperatures."/>
+                        </StackPanel>
+
+                        <Label Grid.Row="5" Grid.Column="0" Content="Alert above (°C):"/>
+                        <StackPanel Grid.Row="5" Grid.Column="1">
+                            <TextBox x:Name="CpuAlertBox"/>
+                            <TextBlock Style="{StaticResource HintText}"
+                                       Text="Leave blank to disable. A tray notification fires when the value exceeds this for the slot."/>
+                        </StackPanel>
+                    </Grid>
+                </GroupBox>
+
+                <!-- GPU slot -->
+                <GroupBox Header="GPU display slot">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Label Grid.Row="0" Grid.Column="0" Content="Sensor type:"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="GpuTypeCombo"
+                                  SelectionChanged="OnGpuTypeChanged"/>
+
+                        <Label Grid.Row="1" Grid.Column="0" Content="Sensor:"/>
+                        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="GpuSensorCombo"
+                                  IsEditable="False" SelectionChanged="OnGpuSensorPicked"/>
+
+                        <Label Grid.Row="2" Grid.Column="0" Content="Pattern (regex):"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="GpuPatternBox"/>
+
+                        <Label Grid.Row="3" Grid.Column="0" Content="Aggregation:"/>
+                        <ComboBox Grid.Row="3" Grid.Column="1" x:Name="GpuAggCombo"/>
+
+                        <Label Grid.Row="4" Grid.Column="0" Content="Scale:"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="GpuScaleBox"/>
+
+                        <Label Grid.Row="5" Grid.Column="0" Content="Alert above (°C):"/>
+                        <TextBox Grid.Row="5" Grid.Column="1" x:Name="GpuAlertBox"/>
+                    </Grid>
+                </GroupBox>
+
+                <!-- Refresh / general -->
+                <GroupBox Header="Update behaviour">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="180"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Label Grid.Row="0" Grid.Column="0" Content="Refresh interval:"/>
+                        <Slider Grid.Row="0" Grid.Column="1" x:Name="RefreshSlider"
+                                Minimum="200" Maximum="10000" SmallChange="100" LargeChange="500"
+                                TickFrequency="500" IsSnapToTickEnabled="True"
+                                ValueChanged="OnRefreshSliderChanged"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="0" Grid.Column="2" x:Name="RefreshSliderLabel"
+                                   VerticalAlignment="Center" MinWidth="80" TextAlignment="Right"/>
+
+                        <Label Grid.Row="1" Grid.Column="0" Content="Reconnect interval (ms):"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                 x:Name="ReconnectBox"/>
+
+                        <CheckBox Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                  x:Name="IntegerCheck" Margin="0,8,0,0"
+                                  Content="Round to whole degrees (no decimals)"/>
+
+                        <CheckBox Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3"
+                                  x:Name="VerboseCheck" Margin="0,4,0,0"
+                                  Content="Verbose logging (per-frame log lines)"/>
+                    </Grid>
+                </GroupBox>
+
+                <!-- Alerts -->
+                <GroupBox Header="Alerts">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="180"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <CheckBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                                  x:Name="AlertsEnabledCheck"
+                                  Content="Enable threshold alerts (tray notifications)"/>
+
+                        <Label Grid.Row="1" Grid.Column="0" Content="Min seconds between alerts:"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="AlertCooldownBox"/>
+                    </Grid>
+                </GroupBox>
+
+                <!-- Logging -->
+                <GroupBox Header="Logging">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="180"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <CheckBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
+                                  x:Name="LoggingEnabledCheck"
+                                  Content="Write events to log file"/>
+
+                        <Label Grid.Row="1" Grid.Column="0" Content="Log file path:"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="LogPathBox"/>
+                        <Button Grid.Row="1" Grid.Column="2" Content="Browse…" Click="OnBrowseLogClicked"/>
+                    </Grid>
+                </GroupBox>
+
+                <!-- Appearance + auto-start -->
+                <GroupBox Header="Appearance and startup">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="180"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Label Grid.Row="0" Grid.Column="0" Content="Theme:"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="ThemeCombo"
+                                  SelectionChanged="OnThemeChanged"/>
+
+                        <CheckBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                  x:Name="AutoStartCheck" Margin="0,8,0,0"
+                                  Content="Start with Windows (current user)"/>
+
+                        <CheckBox Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                                  x:Name="StartMinimizedCheck" Margin="0,4,0,0"
+                                  Content="Start minimised to the system tray"/>
+                    </Grid>
+                </GroupBox>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

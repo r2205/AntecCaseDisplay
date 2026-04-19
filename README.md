@@ -1,23 +1,35 @@
 # AntecCaseDisplay
 
-A small Windows app that drives the CPU/GPU temperature LCD on the **Antec Flux
+A Windows tray app that drives the CPU/GPU temperature LCD on the **Antec Flux
 Pro** case, reading the temperatures from **HWiNFO64** via its shared memory
-interface. It is a replacement for Antec's iUnity software.
+interface. Replacement for Antec's iUnity software.
 
-- Runs as a plain console app (can be wrapped as a Scheduled Task / Windows
-  service)
-- Temperatures come from HWiNFO64's shared memory (`Global\HWiNFO_SENS_SM2`)
-- The display is driven directly over USB HID (VID `0x2022`, PID `0x0522`)
+## Features
+
+- Lives in the system tray; click the icon for settings
+- Reads any HWiNFO temperature/fan/clock/power sensor — pick from a live
+  drop-down, no JSON editing required
+- Multi-sensor matching with Average / Max / Min / First aggregation
+- Adjustable refresh rate (200 ms – 10 s slider)
+- Optional integer-only display (no decimals)
+- Threshold alerts via tray notifications, with a per-alert cooldown
+- Optional log file (auto-rotates at 5 MB)
+- Light / Dark / System theme
+- Optional "start with Windows" and "start minimised"
+- Pause / Resume from the tray menu without quitting
+
+If you just want the simple no-GUI version, check out the `v1.0-cli` tag
+(commit `e602170`).
 
 ## Requirements
 
-- Windows 10/11 x64
-- [.NET 8 SDK](https://dotnet.microsoft.com/download) (to build)
+- Windows 10 or 11 x64
+- [.NET 8 SDK](https://dotnet.microsoft.com/download) (to build from source)
 - [HWiNFO64](https://www.hwinfo.com/) running, with **Settings → Safety →
   Enable Shared Memory Support** ticked. (Shared memory is time-limited on the
   free edition; unlimited on HWiNFO64 Pro.)
 - The Antec Flux Pro internal USB cable plugged into a motherboard USB 2.0
-  header so Windows sees the display as a HID device
+  header so Windows enumerates the display as a HID device
 
 ## Build
 
@@ -25,78 +37,72 @@ interface. It is a replacement for Antec's iUnity software.
 dotnet build -c Release
 ```
 
-The resulting binary is in `AntecCaseDisplay/bin/Release/net8.0-windows/`.
+The output exe is in `AntecCaseDisplay\bin\Release\net8.0-windows\`.
 
 To produce a single self-contained exe:
 
 ```powershell
-dotnet publish AntecCaseDisplay/AntecCaseDisplay.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
+dotnet publish AntecCaseDisplay\AntecCaseDisplay.csproj -c Release -r win-x64 `
+  --self-contained true /p:PublishSingleFile=true
 ```
 
 ## Run
 
-1. Start HWiNFO64 and keep it running in the background (system tray).
-2. Launch `AntecCaseDisplay.exe`. On first run it writes a default
-   `appsettings.json` next to the exe.
+1. Start HWiNFO64 (and keep it running in the background).
+2. Launch `AntecCaseDisplay.exe`.
+   - On first run a default `appsettings.json` is written next to the exe.
+   - The app starts minimised to the tray. Click the tray icon (the blue "A")
+     to open settings.
 
-You should see output like:
+### Settings window
 
-```
-AntecCaseDisplay — HWiNFO64 -> Antec Flux Pro LCD
-Config: ...\appsettings.json
-CPU sensor pattern: ^CPU \(Tctl/Tdie\)$|^CPU Package$|...
-GPU sensor pattern: ^GPU Temperature$|^GPU$|...
-Update interval:    1000 ms
-Press Ctrl+C to exit.
-```
+- **CPU / GPU display slot** — for each of the two slots:
+  - *Sensor type*: Temperature, Fan, Clock, Usage, Power, ...
+  - *Sensor*: live drop-down of every matching sensor HWiNFO is currently
+    reporting. Picking one auto-fills the regex below.
+  - *Pattern (regex)*: edit by hand to match multiple sensors (e.g. all CPU
+    core temps).
+  - *Aggregation*: Average / Max / Min / First — how to combine multiple
+    matched sensors into one number.
+  - *Scale*: multiplier applied before sending. Use `0.01` to fit fan RPM into
+    the 0–99 display range.
+  - *Alert above*: tray notification fires when this value is exceeded
+    (blank = disabled).
+- **Update behaviour**:
+  - *Refresh interval* slider (200 ms – 10 s)
+  - *Reconnect interval* (how long to wait before retrying when HWiNFO or the
+    display disappears)
+  - *Round to whole degrees* — sends X.0 instead of X.Y
+  - *Verbose logging* — one log line per frame
+- **Alerts** — enable, with a cooldown to avoid spam
+- **Logging** — write events to a file (auto-rotates at 5 MB, keeps one
+  backup as `name.log.1`)
+- **Appearance and startup** — Light / Dark / System theme, start with
+  Windows (HKCU `Run` key), start minimised
 
-### Picking the right sensors
+### Tray menu
 
-HWiNFO exposes dozens of temperature sensors. The defaults cover common
-AMD/Intel/NVIDIA setups, but you may need to tweak them. Set
-`"listSensorsOnStart": true` in `appsettings.json` and restart; the program
-will print every temperature sensor it sees, e.g.:
+- **Open settings…** (left-click does the same)
+- **Pause / Resume** — stops or restarts the worker without quitting (the
+  display will keep showing the last frame until the firmware times it out)
+- **Quit**
 
-```
-  42.1 °C  CPU (Tctl/Tdie)
-  38.0 °C  CPU CCD1 (Tdie)
-  55.0 °C  GPU Temperature
-  63.0 °C  GPU Hot Spot
-```
+### Picking the right CPU/GPU sensor
 
-Then copy a name into `cpuSensorPattern` / `gpuSensorPattern`. The patterns
-are **case-insensitive regular expressions**; anchor them with `^...$` if you
-want an exact match, or use a substring like `"CPU Package"`.
+Open settings, choose `Temperature` in the sensor-type drop-down, then the
+sensor drop-down lists every temperature sensor HWiNFO is reporting (e.g.
+`CPU (Tctl/Tdie)`, `GPU Temperature`, `GPU Hot Spot`, `CPU CCD1 (Tdie)`, ...).
+Pick one and the regex below is filled in automatically. To match several
+sensors and average them, edit the regex by hand, e.g. `^Core \d+`.
 
 ### Elevation
 
 HWiNFO64 is often run as administrator (required for some sensors). Shared
 memory created by an elevated process is not visible to an unelevated reader.
-If `AntecCaseDisplay` reports that shared memory is not available, run it as
-administrator too (or start HWiNFO64 unelevated).
+If the status bar shows `HWiNFO: not connected`, run AntecCaseDisplay as
+administrator too — or start HWiNFO64 unelevated.
 
-### Configuration reference
-
-| Key                    | Default    | Meaning                                                                    |
-| ---------------------- | ---------- | -------------------------------------------------------------------------- |
-| `cpuSensorPattern`     | see source | Regex matched against HWiNFO's OriginalName / UserName                     |
-| `gpuSensorPattern`     | see source | Same, for GPU                                                              |
-| `updateIntervalMs`     | 1000       | How often to push a new frame to the display                               |
-| `reconnectIntervalMs`  | 5000       | Retry delay after HWiNFO or the display disappears                         |
-| `verbose`              | false      | Print each frame being sent                                                |
-| `listSensorsOnStart`   | false      | Dump all temperature sensors on startup                                    |
-
-## Running at startup
-
-The simplest option is **Task Scheduler**:
-
-1. Create a basic task. Trigger: _At log on of any user_.
-2. Action: start `AntecCaseDisplay.exe`.
-3. In the task properties, tick _Run with highest privileges_ if HWiNFO runs
-   elevated.
-4. Under _Settings_, untick _Stop the task if it runs longer than_.
-
-## Protocol notes
+## Display protocol notes
 
 The display accepts 12-byte frames over the HID interrupt OUT endpoint:
 
@@ -106,9 +112,9 @@ The display accepts 12-byte frames over the HID interrupt OUT endpoint:
 [2]  0x01
 [3]  0x01
 [4]  0x06
-[5]  CPU tens digit    (24.7 °C -> 2)
-[6]  CPU ones digit    (24.7 °C -> 4)
-[7]  CPU tenths digit  (24.7 °C -> 7)
+[5]  CPU tens digit
+[6]  CPU ones digit
+[7]  CPU tenths digit  (forced to 0 when "Round to whole degrees" is on)
 [8]  GPU tens digit
 [9]  GPU ones digit
 [10] GPU tenths digit
