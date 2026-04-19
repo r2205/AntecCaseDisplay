@@ -178,6 +178,11 @@ public partial class MainWindow : Window
 
     private void UpdateRefreshLabel(double ms)
     {
+        // Slider.ValueChanged fires during XAML parsing (when Maximum is set,
+        // the value gets coerced against the new range) — at that point named
+        // controls below the slider in the markup haven't been created yet.
+        if (RefreshSliderLabel is null) return;
+
         var rounded = (int)Math.Round(ms / 100.0) * 100;
         RefreshSliderLabel.Text = rounded < 1000
             ? $"{rounded} ms"
