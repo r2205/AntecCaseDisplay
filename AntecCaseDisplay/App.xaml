@@ -12,6 +12,73 @@
                 <ResourceDictionary Source="Themes/Light.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- Implicit styles pull Foreground/Background from the DynamicResource
+                 theme brushes. WPF's default styles hard-code SystemColors on
+                 these control types, which would otherwise ignore the Window-level
+                 Foreground inheritance and render as dark-on-dark or light-on-light. -->
+
+            <Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+            </Style>
+
+            <Style TargetType="Label">
+                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+
+            <Style TargetType="CheckBox">
+                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+                <Setter Property="Margin" Value="0,3"/>
+            </Style>
+
+            <Style TargetType="Button">
+                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Padding" Value="14,6"/>
+                <Setter Property="MinWidth" Value="90"/>
+                <Setter Property="Margin" Value="6,0,0,0"/>
+            </Style>
+
+            <Style TargetType="TextBox">
+                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="CaretBrush" Value="{DynamicResource ForegroundBrush}"/>
+                <Setter Property="Padding" Value="4,3"/>
+            </Style>
+
+            <Style TargetType="ComboBox">
+                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Padding" Value="4,3"/>
+            </Style>
+
+            <Style TargetType="ComboBoxItem">
+                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
+                <Setter Property="Padding" Value="6,4"/>
+            </Style>
+
+            <Style TargetType="Slider">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Background" Value="Transparent"/>
+            </Style>
+
+            <Style TargetType="GroupBox">
+                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}"/>
+                <Setter Property="Padding" Value="10"/>
+                <Setter Property="Margin" Value="0,0,0,12"/>
+            </Style>
+
+            <Style TargetType="MenuItem">
+                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}"/>
+            </Style>
+
+            <!-- tray icon resource -->
             <tb:TaskbarIcon x:Key="TrayIcon"
                             x:Shared="True"
                             ToolTipText="AntecCaseDisplay"

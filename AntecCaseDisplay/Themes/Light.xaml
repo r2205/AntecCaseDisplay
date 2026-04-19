@@ -3,6 +3,8 @@
 
     <SolidColorBrush x:Key="WindowBackgroundBrush"  Color="#FFF6F6F6"/>
     <SolidColorBrush x:Key="PanelBackgroundBrush"   Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="InputBackgroundBrush"   Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="ControlBackgroundBrush" Color="#FFF0F0F0"/>
     <SolidColorBrush x:Key="ForegroundBrush"        Color="#FF1E1E1E"/>
     <SolidColorBrush x:Key="MutedForegroundBrush"   Color="#FF666666"/>
     <SolidColorBrush x:Key="AccentBrush"            Color="#FF0078D4"/>

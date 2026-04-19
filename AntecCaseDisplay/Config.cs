@@ -68,9 +68,11 @@ public sealed class Config
     [JsonPropertyName("reconnectIntervalMs")]
     public int ReconnectIntervalMs { get; set; } = 5000;
 
-    /// <summary>Round to whole degrees (sends X.0). Most users prefer this.</summary>
+    /// <summary>Round to whole degrees (sends X.0). Off by default — the
+    /// display's decimal point is always rendered, so the "tenths" digit
+    /// might as well carry real information.</summary>
     [JsonPropertyName("integerTemperatures")]
-    public bool IntegerTemperatures { get; set; } = true;
+    public bool IntegerTemperatures { get; set; } = false;
 
     [JsonPropertyName("alertsEnabled")]
     public bool AlertsEnabled { get; set; } = true;
