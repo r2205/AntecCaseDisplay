@@ -2,6 +2,7 @@ using System.Threading;
 using System.Windows;
 using AntecCaseDisplay.Services;
 using H.NotifyIcon;
+using H.NotifyIcon.Core;
 
 namespace AntecCaseDisplay;
 
