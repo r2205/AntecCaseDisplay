@@ -11,7 +11,9 @@ namespace AntecCaseDisplay;
 public sealed class HwInfoReader : IDisposable
 {
     private const string SharedMemoryName = @"Global\HWiNFO_SENS_SM2";
-    private const uint ExpectedMagic = 0x48695753; // 'SiWH'
+    // HWiNFO writes the four bytes 'H','W','i','S'. On little-endian x86 that
+    // reads back as the uint32 0x53695748 (matches HWiNFO's own SDK constant).
+    private const uint ExpectedMagic = 0x53695748;
 
     // Header layout (little-endian)
     private const int OffsetMagic = 0x00;
