@@ -1,5 +1,8 @@
+using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 using AntecCaseDisplay.Services;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
@@ -37,6 +40,25 @@ public partial class App : Application
 
     private void OnStartup(object sender, StartupEventArgs e)
     {
+        // Catch and surface anything that would otherwise terminate the process
+        // silently. Without this, a XAML / binding / event-handler exception in
+        // the settings window kills the whole app with no message.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            ReportFatal("UI thread", args.Exception);
+            args.Handled = true; // keep the tray running
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            ReportFatal("background", args.ExceptionObject as Exception
+                                     ?? new Exception(args.ExceptionObject?.ToString() ?? "unknown"));
+        };
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            ReportFatal("task", args.Exception);
+            args.SetObserved();
+        };
+
         _singleInstanceMutex = new Mutex(initiallyOwned: false, SingleInstanceMutexName, out var createdNew);
         if (!createdNew)
         {
@@ -109,21 +131,55 @@ public partial class App : Application
 
     public void ShowSettingsWindow()
     {
-        if (_settingsWindow is null || !_settingsWindow.IsLoaded)
-        {
-            _settingsWindow = new MainWindow();
-            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
-        }
-        _settingsWindow.Show();
-        if (_settingsWindow.WindowState == WindowState.Minimized)
-            _settingsWindow.WindowState = WindowState.Normal;
-        _settingsWindow.Activate();
-        _settingsWindow.Topmost = true;
-        _settingsWindow.Topmost = false;
-        _settingsWindow.Focus();
+        // Defer to a background dispatcher tick so the tray context-menu popup
+        // has fully closed before we try to construct/show a window. Showing
+        // a window from the menu's command handler synchronously can race with
+        // popup dismissal and produce silent crashes.
+        Dispatcher.BeginInvoke(new Action(ShowSettingsWindowCore), DispatcherPriority.Background);
     }
 
-    // -------- tray menu handlers (wired in App.xaml below via the tray's ContextMenu) --------
+    private void ShowSettingsWindowCore()
+    {
+        try
+        {
+            if (_settingsWindow is null || !_settingsWindow.IsLoaded)
+            {
+                _settingsWindow = new MainWindow();
+                _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+            }
+            _settingsWindow.Show();
+            if (_settingsWindow.WindowState == WindowState.Minimized)
+                _settingsWindow.WindowState = WindowState.Normal;
+            _settingsWindow.Activate();
+            _settingsWindow.Topmost = true;
+            _settingsWindow.Topmost = false;
+            _settingsWindow.Focus();
+        }
+        catch (Exception ex)
+        {
+            ReportFatal("settings window", ex);
+        }
+    }
 
-    // Tray menu actions are wired up via AppCommands (see App.xaml).
+    private static void ReportFatal(string source, Exception ex)
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "antec-display-error.log");
+            File.AppendAllText(path,
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] ({source}) {ex.GetType().FullName}: {ex.Message}{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch { /* if we can't even log, fall through */ }
+
+        try
+        {
+            MessageBox.Show(
+                $"AntecCaseDisplay hit an error in the {source}:{Environment.NewLine}{Environment.NewLine}" +
+                $"{ex.Message}{Environment.NewLine}{Environment.NewLine}" +
+                $"Full details were written to antec-display-error.log next to the exe.",
+                "AntecCaseDisplay error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        catch { /* if even MessageBox fails, give up */ }
+    }
 }
