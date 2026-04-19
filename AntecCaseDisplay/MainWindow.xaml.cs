@@ -94,12 +94,16 @@ public partial class MainWindow : Window
             ErrorText.Text          = s.LastError ?? "";
 
             // Refresh the picker dropdowns whenever we get a fresh snapshot,
-            // but don't clobber the user's current selection.
+            // but don't clobber the user's current selection — and skip any
+            // combo the user has open right now, otherwise the clear+refill
+            // snaps its scroll position back to the selected item every tick.
             if (s.AllReadings.Count > 0)
             {
                 _lastReadings = s.AllReadings;
-                PopulateSensorCombo(CpuSensorCombo, (HwInfoReader.SensorType?)CpuTypeCombo.SelectedItem ?? HwInfoReader.SensorType.Temperature);
-                PopulateSensorCombo(GpuSensorCombo, (HwInfoReader.SensorType?)GpuTypeCombo.SelectedItem ?? HwInfoReader.SensorType.Temperature);
+                if (!CpuSensorCombo.IsDropDownOpen)
+                    PopulateSensorCombo(CpuSensorCombo, (HwInfoReader.SensorType?)CpuTypeCombo.SelectedItem ?? HwInfoReader.SensorType.Temperature);
+                if (!GpuSensorCombo.IsDropDownOpen)
+                    PopulateSensorCombo(GpuSensorCombo, (HwInfoReader.SensorType?)GpuTypeCombo.SelectedItem ?? HwInfoReader.SensorType.Temperature);
             }
         });
     }
