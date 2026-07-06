@@ -14,7 +14,8 @@ interface. Replacement for Antec's iUnity software.
 - Optional integer-only display (no decimals)
 - Threshold alerts via tray notifications, with a per-alert cooldown
 - Detects when HWiNFO stops updating (crashed, killed, or paused) within ~30 s
-  and blanks the display to dashes instead of showing frozen temperatures
+  and shows dashes on the panel instead of frozen temperatures until HWiNFO
+  comes back
 - Optional log file (auto-rotates at 5 MB)
 - Light / Dark / System theme
 - Optional "start with Windows" and "start minimised"

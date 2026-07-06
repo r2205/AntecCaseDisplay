@@ -22,6 +22,11 @@ public sealed class MonitorService : IDisposable
     public event Action<string, double, double>? AlertFired; // (slotName, value, threshold)
     public event Action<string>? Log;
 
+    // The panel firmware goes dark a couple of seconds after the last frame it
+    // received, so while HWiNFO is unavailable we keep re-sending the "missing
+    // data" dashes at this cadence to keep them visible.
+    private const int BlankKeepAliveIntervalMs = 1000;
+
     private readonly object _lock = new();
     private Config _config;
     private CancellationTokenSource? _cts;
@@ -97,8 +102,11 @@ public sealed class MonitorService : IDisposable
             if (!hw.IsOpen && !hw.TryOpen())
             {
                 lastError = "HWiNFO shared memory not available. Is HWiNFO64 running with 'Shared Memory Support' enabled?";
+                // Normally the branch below opens the display; do it here too so
+                // the panel can show dashes rather than sit dark while HWiNFO is away.
+                if (!display.IsOpen) display.TryOpen();
                 EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
-                await Delay(cfg.ReconnectIntervalMs, token);
+                await DelayWithBlankFrames(display, cfg.ReconnectIntervalMs, token);
                 continue;
             }
 
@@ -120,11 +128,8 @@ public sealed class MonitorService : IDisposable
                 lastError = $"HWiNFO read failed: {ex.Message}";
                 Log?.Invoke(lastError);
                 hw.Close();
-                // Don't leave the last frame up as if it were live — show the
-                // display's "missing data" dashes until fresh readings arrive.
-                TrySendBlank(display);
                 EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
-                await Delay(cfg.ReconnectIntervalMs, token);
+                await DelayWithBlankFrames(display, cfg.ReconnectIntervalMs, token);
                 continue;
             }
 
@@ -194,6 +199,23 @@ public sealed class MonitorService : IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"StatusChanged handler threw: {ex}");
+        }
+    }
+
+    /// <summary>
+    /// Waits like <see cref="Delay"/>, but re-sends the "missing data" dashes once
+    /// a second so the panel keeps showing them instead of going dark while we
+    /// wait to reconnect.
+    /// </summary>
+    private static async Task DelayWithBlankFrames(AntecDisplay display, int totalMs, CancellationToken token)
+    {
+        var remaining = Math.Max(50, totalMs);
+        while (remaining > 0 && !token.IsCancellationRequested)
+        {
+            TrySendBlank(display);
+            var chunk = Math.Min(BlankKeepAliveIntervalMs, remaining);
+            await Delay(chunk, token);
+            remaining -= chunk;
         }
     }
 
