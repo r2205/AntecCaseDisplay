@@ -22,7 +22,14 @@ public partial class MainWindow : Window
         LoadFromConfig();
 
         App.Current.Monitor.StatusChanged += OnMonitorStatus;
-        Closed += (_, _) => App.Current.Monitor.StatusChanged -= OnMonitorStatus;
+        Closed += (_, _) =>
+        {
+            App.Current.Monitor.StatusChanged -= OnMonitorStatus;
+            // The theme combo live-previews immediately. However the window goes
+            // away (Cancel, Save & Close, or the title-bar X), leave the applied
+            // theme matching the saved config. After a save this is a no-op.
+            ThemeManager.Apply(App.Current.Config.Theme);
+        };
 
         _suppressUiEvents = false;
     }
@@ -222,9 +229,7 @@ public partial class MainWindow : Window
 
     private void OnCancelClicked(object sender, RoutedEventArgs e)
     {
-        // Discard changes — re-apply the persisted theme so the live preview
-        // doesn't leave the wrong theme up.
-        ThemeManager.Apply(App.Current.Config.Theme);
+        // Discard changes; the Closed handler reverts any live theme preview.
         Close();
     }
 
