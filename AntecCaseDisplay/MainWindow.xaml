@@ -26,15 +26,20 @@
         <Border DockPanel.Dock="Top" Padding="10" Margin="0,0,0,12"
                 Background="{DynamicResource PanelBackgroundBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="HWiNFO:" FontWeight="Bold" Margin="0,0,4,0"/>
-                <TextBlock x:Name="HwInfoStatusText" Text="..." Margin="0,0,18,0"/>
-                <TextBlock Text="Display:" FontWeight="Bold" Margin="0,0,4,0"/>
-                <TextBlock x:Name="DisplayStatusText" Text="..." Margin="0,0,18,0"/>
-                <TextBlock Text="CPU:" FontWeight="Bold" Margin="0,0,4,0"/>
-                <TextBlock x:Name="LiveCpuText" Text="--" Margin="0,0,18,0"/>
-                <TextBlock Text="GPU:" FontWeight="Bold" Margin="0,0,4,0"/>
-                <TextBlock x:Name="LiveGpuText" Text="--"/>
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="HWiNFO:" FontWeight="Bold" Margin="0,0,4,0"/>
+                    <TextBlock x:Name="HwInfoStatusText" Text="..." Margin="0,0,18,0"/>
+                    <TextBlock Text="Display:" FontWeight="Bold" Margin="0,0,4,0"/>
+                    <TextBlock x:Name="DisplayStatusText" Text="..." Margin="0,0,18,0"/>
+                    <TextBlock Text="CPU:" FontWeight="Bold" Margin="0,0,4,0"/>
+                    <TextBlock x:Name="LiveCpuText" Text="--" Margin="0,0,18,0"/>
+                    <TextBlock Text="GPU:" FontWeight="Bold" Margin="0,0,4,0"/>
+                    <TextBlock x:Name="LiveGpuText" Text="--"/>
+                </StackPanel>
+                <!-- live monitor error; save feedback has its own text at the bottom -->
+                <TextBlock x:Name="MonitorErrorText" TextWrapping="Wrap" Margin="0,6,0,0"
+                           Foreground="{DynamicResource BadBrush}" Visibility="Collapsed"/>
             </StackPanel>
         </Border>
 

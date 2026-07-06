@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using AntecCaseDisplay.Services;
@@ -91,7 +92,9 @@ public partial class MainWindow : Window
             DisplayStatusText.Text  = s.DisplayConnected ? "connected"     : "not connected";
             LiveCpuText.Text        = s.CpuValue is null ? "--"            : $"{s.CpuValue.Value:F1}°C";
             LiveGpuText.Text        = s.GpuValue is null ? "--"            : $"{s.GpuValue.Value:F1}°C";
-            ErrorText.Text          = s.LastError ?? "";
+            MonitorErrorText.Text       = s.LastError ?? "";
+            MonitorErrorText.Visibility = string.IsNullOrEmpty(s.LastError)
+                ? Visibility.Collapsed : Visibility.Visible;
 
             // Refresh the picker dropdowns whenever we get a fresh snapshot,
             // but don't clobber the user's current selection — and skip any
@@ -203,7 +206,7 @@ public partial class MainWindow : Window
     {
         // Sensor list updates automatically on the next StatusChanged tick.
         // This button just gives users a way to feel like they're forcing it.
-        ErrorText.Text = "Refreshing… (next tick will repopulate the sensor lists)";
+        ShowFeedback("Refreshing… (next tick will repopulate the sensor lists)", "MutedForegroundBrush");
     }
 
     private void OnBrowseLogClicked(object sender, RoutedEventArgs e)
@@ -229,44 +232,73 @@ public partial class MainWindow : Window
     {
         if (TryCommit(out var msg))
         {
-            ErrorText.Text = "Saved.";
+            ShowFeedback("Saved.", "GoodBrush");
         }
         else
         {
-            ErrorText.Text = msg;
+            ShowFeedback(msg, "BadBrush");
         }
     }
 
     private void OnSaveCloseClicked(object sender, RoutedEventArgs e)
     {
         if (TryCommit(out var msg)) Close();
-        else ErrorText.Text = msg;
+        else ShowFeedback(msg, "BadBrush");
+    }
+
+    private void ShowFeedback(string message, string brushKey)
+    {
+        ErrorText.Text = message;
+        // Resource reference (not a direct brush) so it keeps tracking the theme.
+        ErrorText.SetResourceReference(TextBlock.ForegroundProperty, brushKey);
     }
 
     private bool TryCommit(out string error)
     {
+        // Parse and validate everything up front — a typo must fail the save
+        // loudly, not silently fall back to a default (the old behaviour could
+        // e.g. disable an alert because of one mistyped character).
+        var errors = new List<string>();
+
+        var cpuPattern = ValidatePattern(CpuPatternBox.Text, "CPU pattern", errors);
+        var cpuScale   = RequireNumber(CpuScaleBox.Text, "CPU scale", errors);
+        var cpuAlert   = OptionalNumber(CpuAlertBox.Text, "CPU alert threshold", errors);
+
+        var gpuPattern = ValidatePattern(GpuPatternBox.Text, "GPU pattern", errors);
+        var gpuScale   = RequireNumber(GpuScaleBox.Text, "GPU scale", errors);
+        var gpuAlert   = OptionalNumber(GpuAlertBox.Text, "GPU alert threshold", errors);
+
+        var reconnectMs = RequireWholeNumber(ReconnectBox.Text, "Reconnect interval", 50, 3_600_000, errors);
+        var cooldownS   = RequireWholeNumber(AlertCooldownBox.Text, "Min seconds between alerts", 1, 86_400, errors);
+
+        if (errors.Count > 0)
+        {
+            error = "Not saved:\n" + string.Join("\n", errors);
+            return false;
+        }
+
         error = "";
         try
         {
             _editing.Cpu.SensorType   = (HwInfoReader.SensorType)CpuTypeCombo.SelectedItem!;
-            _editing.Cpu.NamePattern  = CpuPatternBox.Text.Trim();
+            _editing.Cpu.NamePattern  = cpuPattern;
             _editing.Cpu.Aggregation  = (SensorAggregation)CpuAggCombo.SelectedItem!;
-            _editing.Cpu.Scale        = ParseDouble(CpuScaleBox.Text, 1.0);
-            _editing.Cpu.AlertThreshold = ParseNullableDouble(CpuAlertBox.Text);
+            _editing.Cpu.Scale        = cpuScale;
+            _editing.Cpu.AlertThreshold = cpuAlert;
 
             _editing.Gpu.SensorType   = (HwInfoReader.SensorType)GpuTypeCombo.SelectedItem!;
-            _editing.Gpu.NamePattern  = GpuPatternBox.Text.Trim();
+            _editing.Gpu.NamePattern  = gpuPattern;
             _editing.Gpu.Aggregation  = (SensorAggregation)GpuAggCombo.SelectedItem!;
-            _editing.Gpu.Scale        = ParseDouble(GpuScaleBox.Text, 1.0);
-            _editing.Gpu.AlertThreshold = ParseNullableDouble(GpuAlertBox.Text);
+            _editing.Gpu.Scale        = gpuScale;
+            _editing.Gpu.AlertThreshold = gpuAlert;
 
             _editing.UpdateIntervalMs       = (int)Math.Round(RefreshSlider.Value);
-            _editing.ReconnectIntervalMs    = (int)ParseDouble(ReconnectBox.Text, 5000);
+            _editing.ReconnectIntervalMs    = reconnectMs;
             _editing.IntegerTemperatures    = IntegerCheck.IsChecked == true;
             _editing.Verbose                = VerboseCheck.IsChecked == true;
 
             _editing.AlertsEnabled          = AlertsEnabledCheck.IsChecked == true;
-            _editing.AlertMinIntervalSeconds= (int)ParseDouble(AlertCooldownBox.Text, 60);
+            _editing.AlertMinIntervalSeconds= cooldownS;
 
             _editing.LoggingEnabled         = LoggingEnabledCheck.IsChecked == true;
             _editing.LogPath                = LogPathBox.Text.Trim();
@@ -298,9 +330,54 @@ public partial class MainWindow : Window
         }
     }
 
-    private static double ParseDouble(string text, double fallback) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;
+    // ---- commit-time validation ----
 
-    private static double? ParseNullableDouble(string text) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : (double?)null;
+    private static double RequireNumber(string text, string field, List<string> errors)
+    {
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) &&
+            !double.IsNaN(v) && !double.IsInfinity(v))
+        {
+            return v;
+        }
+        errors.Add($"{field}: \"{text.Trim()}\" is not a number.");
+        return 0;
+    }
+
+    private static double? OptionalNumber(string text, string field, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) &&
+            !double.IsNaN(v) && !double.IsInfinity(v))
+        {
+            return v;
+        }
+        errors.Add($"{field}: \"{text.Trim()}\" is not a number (leave blank to disable).");
+        return null;
+    }
+
+    private static int RequireWholeNumber(string text, string field, int min, int max, List<string> errors)
+    {
+        if (int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) &&
+            v >= min && v <= max)
+        {
+            return v;
+        }
+        errors.Add($"{field}: must be a whole number between {min} and {max}.");
+        return min;
+    }
+
+    private static string ValidatePattern(string text, string field, List<string> errors)
+    {
+        var pattern = text.Trim();
+        if (pattern.Length == 0) return pattern; // empty leaves the slot showing dashes
+        try
+        {
+            _ = new Regex(pattern);
+        }
+        catch (ArgumentException ex)
+        {
+            errors.Add($"{field}: not a valid regex ({ex.Message}).");
+        }
+        return pattern;
+    }
 }
