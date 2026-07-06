@@ -207,7 +207,19 @@ public sealed class Config
     public void Save(string path)
     {
         var json = JsonSerializer.Serialize(this, SerializerOptions);
-        File.WriteAllText(path, json);
+
+        // Write-to-temp, flush to disk, then swap into place. A crash or power
+        // cut mid-save can then never leave a half-written appsettings.json —
+        // the real file is always either the old version or the new one.
+        var tmp = path + ".tmp";
+        using (var stream = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+        using (var writer = new StreamWriter(stream))
+        {
+            writer.Write(json);
+            writer.Flush();
+            stream.Flush(flushToDisk: true);
+        }
+        File.Move(tmp, path, overwrite: true);
     }
 
     public Config Clone()
