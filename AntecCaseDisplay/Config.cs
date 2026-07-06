@@ -146,25 +146,18 @@ public sealed class Config
                          ?? throw new InvalidDataException($"Failed to parse {path}");
 
             // Migrate the v1 flat schema (cpuSensorPattern / gpuSensorPattern) so
-            // upgrading from the CLI build doesn't lose user-tuned regexes.
+            // upgrading from the CLI build doesn't lose user-tuned regexes. A v1
+            // file has no "cpu"/"gpu" objects, so the deserializer leaves those
+            // properties at their (non-empty) defaults — the JSON itself is the
+            // only way to tell "explicitly configured" apart from "defaulted".
             try
             {
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
                 if (root.ValueKind == JsonValueKind.Object)
                 {
-                    if (string.IsNullOrEmpty(loaded.Cpu.NamePattern) &&
-                        root.TryGetProperty("cpuSensorPattern", out var cpuPat) &&
-                        cpuPat.ValueKind == JsonValueKind.String)
-                    {
-                        loaded.Cpu.NamePattern = cpuPat.GetString() ?? loaded.Cpu.NamePattern;
-                    }
-                    if (string.IsNullOrEmpty(loaded.Gpu.NamePattern) &&
-                        root.TryGetProperty("gpuSensorPattern", out var gpuPat) &&
-                        gpuPat.ValueKind == JsonValueKind.String)
-                    {
-                        loaded.Gpu.NamePattern = gpuPat.GetString() ?? loaded.Gpu.NamePattern;
-                    }
+                    MigrateV1Pattern(root, "cpu", "cpuSensorPattern", loaded.Cpu);
+                    MigrateV1Pattern(root, "gpu", "gpuSensorPattern", loaded.Gpu);
                 }
             }
             catch
@@ -179,6 +172,33 @@ public sealed class Config
             warning = QuarantineUnreadableFile(path, ex);
             return new Config();
         }
+    }
+
+    /// <summary>
+    /// Applies a v1 flat sensor pattern (e.g. "cpuSensorPattern") to a v2 slot,
+    /// unless the JSON explicitly configures the slot's own namePattern — an
+    /// explicit v2 value always wins. Also selects First aggregation, because v1
+    /// used "first match wins" rather than averaging.
+    /// </summary>
+    private static void MigrateV1Pattern(JsonElement root, string slotProperty, string v1Property, SlotConfig slot)
+    {
+        if (!root.TryGetProperty(v1Property, out var v1Pat) ||
+            v1Pat.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(v1Pat.GetString()))
+        {
+            return; // nothing to migrate
+        }
+
+        if (root.TryGetProperty(slotProperty, out var slotObj) &&
+            slotObj.ValueKind == JsonValueKind.Object &&
+            slotObj.TryGetProperty("namePattern", out var v2Pat) &&
+            v2Pat.ValueKind == JsonValueKind.String)
+        {
+            return; // slot pattern explicitly set in the v2 schema
+        }
+
+        slot.NamePattern = v1Pat.GetString()!;
+        slot.Aggregation = SensorAggregation.First;
     }
 
     /// <summary>
