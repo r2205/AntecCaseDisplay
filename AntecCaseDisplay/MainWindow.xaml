@@ -164,9 +164,13 @@
                         </Grid.RowDefinitions>
 
                         <Label Grid.Row="0" Grid.Column="0" Content="Refresh interval:"/>
+                        <!-- Ticks anchor at Minimum, so the frequency must divide evenly
+                             into round values from 200 — at 500 the grid was 200/700/1200…
+                             and could never land on 1000. 100 keeps every stop a clean
+                             multiple of 100, matching SmallChange and the label rounding. -->
                         <Slider Grid.Row="0" Grid.Column="1" x:Name="RefreshSlider"
                                 Minimum="200" Maximum="10000" SmallChange="100" LargeChange="500"
-                                TickFrequency="500" IsSnapToTickEnabled="True"
+                                TickFrequency="100" IsSnapToTickEnabled="True"
                                 ValueChanged="OnRefreshSliderChanged"
                                 VerticalAlignment="Center"/>
                         <TextBlock Grid.Row="0" Grid.Column="2" x:Name="RefreshSliderLabel"
