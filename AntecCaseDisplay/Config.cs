@@ -111,47 +111,97 @@ public sealed class Config
     public static string DefaultPath =>
         Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 
-    public static Config Load(string path)
+    /// <summary>
+    /// Loads settings from <paramref name="path"/>. Never throws: a missing file
+    /// produces defaults (persisted best-effort), and an unreadable file is moved
+    /// aside as "&lt;file&gt;.bad" and replaced with defaults. When something went
+    /// wrong, <paramref name="warning"/> carries a user-facing description.
+    /// </summary>
+    public static Config Load(string path, out string? warning)
     {
+        warning = null;
+
         if (!File.Exists(path))
         {
             var defaults = new Config();
-            defaults.Save(path);
+            try
+            {
+                defaults.Save(path);
+            }
+            catch (Exception ex)
+            {
+                // Read-only install location and the like. Run on in-memory
+                // defaults; the settings window reports the same problem if the
+                // user tries to save.
+                warning = $"Could not write default settings to {path} ({ex.Message}). " +
+                          "Changes made in the settings window will not survive a restart.";
+            }
             return defaults;
         }
 
-        var json = File.ReadAllText(path);
-        var loaded = JsonSerializer.Deserialize<Config>(json, SerializerOptions)
-                     ?? throw new InvalidDataException($"Failed to parse {path}");
-
-        // Migrate the v1 flat schema (cpuSensorPattern / gpuSensorPattern) so
-        // upgrading from the CLI build doesn't lose user-tuned regexes.
         try
         {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (root.ValueKind == JsonValueKind.Object)
+            var json = File.ReadAllText(path);
+            var loaded = JsonSerializer.Deserialize<Config>(json, SerializerOptions)
+                         ?? throw new InvalidDataException($"Failed to parse {path}");
+
+            // Migrate the v1 flat schema (cpuSensorPattern / gpuSensorPattern) so
+            // upgrading from the CLI build doesn't lose user-tuned regexes.
+            try
             {
-                if (string.IsNullOrEmpty(loaded.Cpu.NamePattern) &&
-                    root.TryGetProperty("cpuSensorPattern", out var cpuPat) &&
-                    cpuPat.ValueKind == JsonValueKind.String)
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.ValueKind == JsonValueKind.Object)
                 {
-                    loaded.Cpu.NamePattern = cpuPat.GetString() ?? loaded.Cpu.NamePattern;
-                }
-                if (string.IsNullOrEmpty(loaded.Gpu.NamePattern) &&
-                    root.TryGetProperty("gpuSensorPattern", out var gpuPat) &&
-                    gpuPat.ValueKind == JsonValueKind.String)
-                {
-                    loaded.Gpu.NamePattern = gpuPat.GetString() ?? loaded.Gpu.NamePattern;
+                    if (string.IsNullOrEmpty(loaded.Cpu.NamePattern) &&
+                        root.TryGetProperty("cpuSensorPattern", out var cpuPat) &&
+                        cpuPat.ValueKind == JsonValueKind.String)
+                    {
+                        loaded.Cpu.NamePattern = cpuPat.GetString() ?? loaded.Cpu.NamePattern;
+                    }
+                    if (string.IsNullOrEmpty(loaded.Gpu.NamePattern) &&
+                        root.TryGetProperty("gpuSensorPattern", out var gpuPat) &&
+                        gpuPat.ValueKind == JsonValueKind.String)
+                    {
+                        loaded.Gpu.NamePattern = gpuPat.GetString() ?? loaded.Gpu.NamePattern;
+                    }
                 }
             }
+            catch
+            {
+                // Migration is best-effort; defaults already cover most setups.
+            }
+
+            return loaded;
+        }
+        catch (Exception ex)
+        {
+            warning = QuarantineUnreadableFile(path, ex);
+            return new Config();
+        }
+    }
+
+    /// <summary>
+    /// Moves a settings file that failed to load aside and writes fresh defaults
+    /// in its place, so the next launch starts clean while the old file stays
+    /// recoverable. Returns the warning to show the user.
+    /// </summary>
+    private static string QuarantineUnreadableFile(string path, Exception cause)
+    {
+        string disposition;
+        try
+        {
+            var backup = path + ".bad";
+            File.Move(path, backup, overwrite: true);
+            disposition = $"The old file was kept as {Path.GetFileName(backup)}";
+            try { new Config().Save(path); } catch { /* best effort */ }
         }
         catch
         {
-            // Migration is best-effort; defaults already cover most setups.
+            disposition = "The old file was left in place";
         }
-
-        return loaded;
+        return $"Could not read settings file {Path.GetFileName(path)} ({cause.Message}). " +
+               $"Defaults are in use. {disposition}.";
     }
 
     public void Save(string path)

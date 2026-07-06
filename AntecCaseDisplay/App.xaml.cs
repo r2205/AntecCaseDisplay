@@ -59,43 +59,61 @@ public partial class App : Application
             args.SetObserved();
         };
 
-        _singleInstanceMutex = new Mutex(initiallyOwned: false, SingleInstanceMutexName, out var createdNew);
-        if (!createdNew)
+        try
         {
-            MessageBox.Show("AntecCaseDisplay is already running. Look for the icon in your system tray.",
-                "AntecCaseDisplay", MessageBoxButton.OK, MessageBoxImage.Information);
-            Shutdown();
-            return;
-        }
-
-        _config = Config.Load(Config.DefaultPath);
-        ThemeManager.Apply(_config.Theme);
-
-        _log = new LogService();
-        _log.Configure(_config.LoggingEnabled, _config.LogPath);
-
-        _monitor = new MonitorService(_config);
-        _monitor.Log += msg => _log?.Write(msg);
-        _monitor.AlertFired += OnAlertFired;
-        _monitor.Start();
-
-        _trayIcon = (TaskbarIcon)FindResource("TrayIcon");
-        _trayIcon.ForceCreate();
-        UpdateTrayTooltip("Starting...");
-
-        _monitor.StatusChanged += s =>
-        {
-            Dispatcher.BeginInvoke(() =>
+            _singleInstanceMutex = new Mutex(initiallyOwned: false, SingleInstanceMutexName, out var createdNew);
+            if (!createdNew)
             {
-                var cpu = s.CpuValue is null ? "--" : ((int)Math.Round(s.CpuValue.Value)).ToString();
-                var gpu = s.GpuValue is null ? "--" : ((int)Math.Round(s.GpuValue.Value)).ToString();
-                UpdateTrayTooltip($"CPU: {cpu}°C   GPU: {gpu}°C{(s.LastError is null ? "" : $"\n{s.LastError}")}");
-            });
-        };
+                MessageBox.Show("AntecCaseDisplay is already running. Look for the icon in your system tray.",
+                    "AntecCaseDisplay", MessageBoxButton.OK, MessageBoxImage.Information);
+                Shutdown();
+                return;
+            }
 
-        if (!_config.StartMinimized)
+            _config = Config.Load(Config.DefaultPath, out var configWarning);
+            ThemeManager.Apply(_config.Theme);
+
+            _log = new LogService();
+            _log.Configure(_config.LoggingEnabled, _config.LogPath);
+
+            _monitor = new MonitorService(_config);
+            _monitor.Log += msg => _log?.Write(msg);
+            _monitor.AlertFired += OnAlertFired;
+            _monitor.Start();
+
+            _trayIcon = (TaskbarIcon)FindResource("TrayIcon");
+            _trayIcon.ForceCreate();
+            UpdateTrayTooltip("Starting...");
+
+            _monitor.StatusChanged += s =>
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    var cpu = s.CpuValue is null ? "--" : ((int)Math.Round(s.CpuValue.Value)).ToString();
+                    var gpu = s.GpuValue is null ? "--" : ((int)Math.Round(s.GpuValue.Value)).ToString();
+                    UpdateTrayTooltip($"CPU: {cpu}°C   GPU: {gpu}°C{(s.LastError is null ? "" : $"\n{s.LastError}")}");
+                });
+            };
+
+            if (!_config.StartMinimized)
+            {
+                ShowSettingsWindow();
+            }
+
+            if (configWarning is not null)
+            {
+                MessageBox.Show(configWarning, "AntecCaseDisplay settings",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
         {
-            ShowSettingsWindow();
+            // A half-initialised app with OnExplicitShutdown would linger as an
+            // invisible process holding the single-instance mutex, and every
+            // relaunch would then claim it is "already running". Report and exit
+            // instead of leaving a zombie only Task Manager can remove.
+            ReportFatal("startup", ex);
+            Shutdown();
         }
     }
 
