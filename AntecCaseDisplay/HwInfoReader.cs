@@ -13,6 +13,10 @@ namespace AntecCaseDisplay;
 public sealed class HwInfoReader : IDisposable
 {
     private const string SharedMemoryName = @"Global\HWiNFO_SENS_SM2";
+    // HWiNFO holds this while it rewrites the shared memory block. Values sit at
+    // packed (unaligned) offsets, so reading without the mutex can tear a double
+    // mid-update and produce a one-tick garbage value.
+    private const string SharedMemoryMutexName = @"Global\HWiNFO_SM2_MUTEX";
     // HWiNFO writes the four bytes 'H','W','i','S'. On little-endian x86 that
     // reads back as the uint32 0x53695748 (matches HWiNFO's own SDK constant).
     private const uint ExpectedMagic = 0x53695748;
@@ -54,6 +58,7 @@ public sealed class HwInfoReader : IDisposable
         double Value);
 
     private MemoryMappedFile? _mmf;
+    private Mutex? _mutex;
 
     /// <summary>
     /// How long poll_time may stay unchanged before <see cref="ReadAll"/> declares the
@@ -82,7 +87,6 @@ public sealed class HwInfoReader : IDisposable
             _mmf = MemoryMappedFile.OpenExisting(
                 SharedMemoryName,
                 MemoryMappedFileRights.Read);
-            return true;
         }
         catch (FileNotFoundException)
         {
@@ -93,6 +97,18 @@ public sealed class HwInfoReader : IDisposable
             // Happens when HWiNFO runs elevated and we do not. Caller will surface this.
             return false;
         }
+
+        // Best-effort: without the mutex we still read, exactly as older builds
+        // did — just with the (small) risk of torn values back on the table.
+        try
+        {
+            _mutex = Mutex.OpenExisting(SharedMemoryMutexName);
+        }
+        catch
+        {
+            _mutex = null;
+        }
+        return true;
     }
 
     public IReadOnlyList<Reading> ReadAll()
@@ -102,7 +118,43 @@ public sealed class HwInfoReader : IDisposable
             throw new InvalidOperationException("Shared memory not open. Call TryOpen() first.");
         }
 
-        using var accessor = _mmf.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read);
+        var locked = TryAcquireUpdateLock();
+        try
+        {
+            return ReadAllCore();
+        }
+        finally
+        {
+            if (locked) _mutex!.ReleaseMutex();
+        }
+    }
+
+    /// <summary>
+    /// Acquires HWiNFO's shared-memory mutex so we don't read mid-update.
+    /// False (read lock-free) when the mutex is unavailable or HWiNFO holds it
+    /// for suspiciously long — a wedged HWiNFO must not stall the worker.
+    /// </summary>
+    private bool TryAcquireUpdateLock()
+    {
+        if (_mutex is null) return false;
+        try
+        {
+            return _mutex.WaitOne(TimeSpan.FromMilliseconds(500));
+        }
+        catch (AbandonedMutexException)
+        {
+            // The previous owner died while holding it; ownership is now ours.
+            return true;
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+    }
+
+    private IReadOnlyList<Reading> ReadAllCore()
+    {
+        using var accessor = _mmf!.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read);
 
         var magic = accessor.ReadUInt32(OffsetMagic);
         if (magic != ExpectedMagic)
@@ -189,6 +241,8 @@ public sealed class HwInfoReader : IDisposable
     {
         _mmf?.Dispose();
         _mmf = null;
+        _mutex?.Dispose();
+        _mutex = null;
     }
 
     public void Dispose() => Close();
