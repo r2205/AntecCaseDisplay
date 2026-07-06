@@ -92,79 +92,102 @@ public sealed class MonitorService : IDisposable
     {
         using var hw = new HwInfoReader();
         using var display = new AntecDisplay();
-        string? lastError = null;
 
         while (!token.IsCancellationRequested)
         {
             Config cfg;
             lock (_lock) { cfg = _config; }
 
-            if (!hw.IsOpen && !hw.TryOpen())
-            {
-                lastError = "HWiNFO shared memory not available. Is HWiNFO64 running with 'Shared Memory Support' enabled?";
-                // Normally the branch below opens the display; do it here too so
-                // the panel can show dashes rather than sit dark while HWiNFO is away.
-                if (!display.IsOpen) display.TryOpen();
-                EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
-                await DelayWithBlankFrames(display, cfg.ReconnectIntervalMs, token);
-                continue;
-            }
-
-            if (!display.IsOpen && !display.TryOpen())
-            {
-                lastError = $"Antec Flux Pro display not found (VID=0x{AntecDisplay.VendorId:X4}, PID=0x{AntecDisplay.ProductId:X4}).";
-                EmitStatus(true, false, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
-                await Delay(cfg.ReconnectIntervalMs, token);
-                continue;
-            }
-
-            IReadOnlyList<HwInfoReader.Reading> readings;
             try
             {
-                readings = hw.ReadAll();
+                await TickAsync(hw, display, cfg, token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Stop() in progress; the loop condition takes care of the exit.
             }
             catch (Exception ex)
             {
-                lastError = $"HWiNFO read failed: {ex.Message}";
-                Log?.Invoke(lastError);
+                // Nothing may kill the worker silently: a faulted task would
+                // freeze the tooltip and display at their last values, with the
+                // error surfacing only if the finalizer ever runs. Report it,
+                // reset the connections, and keep the loop alive.
+                var error = $"Monitor error: {ex.Message}";
+                Log?.Invoke(error);
                 hw.Close();
-                EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
-                await DelayWithBlankFrames(display, cfg.ReconnectIntervalMs, token);
-                continue;
-            }
-
-            var cpu = SensorResolver.Resolve(cfg.Cpu, readings);
-            var gpu = SensorResolver.Resolve(cfg.Gpu, readings);
-
-            var cpuToSend = ApplyDisplayRounding(cpu.Value, cfg.IntegerTemperatures);
-            var gpuToSend = ApplyDisplayRounding(gpu.Value, cfg.IntegerTemperatures);
-
-            try
-            {
-                display.Send(cpuToSend, gpuToSend);
-                lastError = null;
-            }
-            catch (Exception ex)
-            {
-                lastError = $"Display write failed: {ex.Message}";
-                Log?.Invoke(lastError);
-                display.Close();
-                EmitStatus(true, false, cpu.Value, gpu.Value, cpu.MatchedNames, gpu.MatchedNames, readings, lastError);
+                TrySendBlank(display);
+                EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), error);
                 await Delay(cfg.ReconnectIntervalMs, token);
-                continue;
             }
-
-            CheckAlerts(cfg, cpu.Value, gpu.Value);
-
-            if (cfg.Verbose)
-            {
-                Log?.Invoke($"CPU={Format(cpu.Value)} GPU={Format(gpu.Value)} (cpu matches: {string.Join(", ", cpu.MatchedNames)}; gpu matches: {string.Join(", ", gpu.MatchedNames)})");
-            }
-
-            EmitStatus(true, true, cpu.Value, gpu.Value, cpu.MatchedNames, gpu.MatchedNames, readings, null);
-
-            await Delay(cfg.UpdateIntervalMs, token);
         }
+    }
+
+    private async Task TickAsync(HwInfoReader hw, AntecDisplay display, Config cfg, CancellationToken token)
+    {
+        if (!hw.IsOpen && !hw.TryOpen())
+        {
+            var error = "HWiNFO shared memory not available. Is HWiNFO64 running with 'Shared Memory Support' enabled?";
+            // Normally the branch below opens the display; do it here too so
+            // the panel can show dashes rather than sit dark while HWiNFO is away.
+            if (!display.IsOpen) display.TryOpen();
+            EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), error);
+            await DelayWithBlankFrames(display, cfg.ReconnectIntervalMs, token);
+            return;
+        }
+
+        if (!display.IsOpen && !display.TryOpen())
+        {
+            var error = $"Antec Flux Pro display not found (VID=0x{AntecDisplay.VendorId:X4}, PID=0x{AntecDisplay.ProductId:X4}).";
+            EmitStatus(true, false, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), error);
+            await Delay(cfg.ReconnectIntervalMs, token);
+            return;
+        }
+
+        IReadOnlyList<HwInfoReader.Reading> readings;
+        try
+        {
+            readings = hw.ReadAll();
+        }
+        catch (Exception ex)
+        {
+            var error = $"HWiNFO read failed: {ex.Message}";
+            Log?.Invoke(error);
+            hw.Close();
+            EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), error);
+            await DelayWithBlankFrames(display, cfg.ReconnectIntervalMs, token);
+            return;
+        }
+
+        var cpu = SensorResolver.Resolve(cfg.Cpu, readings);
+        var gpu = SensorResolver.Resolve(cfg.Gpu, readings);
+
+        var cpuToSend = ApplyDisplayRounding(cpu.Value, cfg.IntegerTemperatures);
+        var gpuToSend = ApplyDisplayRounding(gpu.Value, cfg.IntegerTemperatures);
+
+        try
+        {
+            display.Send(cpuToSend, gpuToSend);
+        }
+        catch (Exception ex)
+        {
+            var error = $"Display write failed: {ex.Message}";
+            Log?.Invoke(error);
+            display.Close();
+            EmitStatus(true, false, cpu.Value, gpu.Value, cpu.MatchedNames, gpu.MatchedNames, readings, error);
+            await Delay(cfg.ReconnectIntervalMs, token);
+            return;
+        }
+
+        CheckAlerts(cfg, cpu.Value, gpu.Value);
+
+        if (cfg.Verbose)
+        {
+            Log?.Invoke($"CPU={Format(cpu.Value)} GPU={Format(gpu.Value)} (cpu matches: {string.Join(", ", cpu.MatchedNames)}; gpu matches: {string.Join(", ", gpu.MatchedNames)})");
+        }
+
+        EmitStatus(true, true, cpu.Value, gpu.Value, cpu.MatchedNames, gpu.MatchedNames, readings, null);
+
+        await Delay(cfg.UpdateIntervalMs, token);
     }
 
     private void CheckAlerts(Config cfg, double? cpu, double? gpu)
