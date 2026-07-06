@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Text;
@@ -18,6 +19,7 @@ public sealed class HwInfoReader : IDisposable
 
     // Header layout (little-endian)
     private const int OffsetMagic = 0x00;
+    private const int OffsetPollTime = 0x0C; // __time64_t of HWiNFO's last sensor poll
     private const int OffsetSensorSectionOffset = 0x14;
     private const int OffsetSensorElementSize = 0x18;
     private const int OffsetSensorElementCount = 0x1C;
@@ -52,6 +54,19 @@ public sealed class HwInfoReader : IDisposable
         double Value);
 
     private MemoryMappedFile? _mmf;
+
+    /// <summary>
+    /// How long poll_time may stay unchanged before <see cref="ReadAll"/> declares the
+    /// data stale. Generous against HWiNFO's default 2 s polling period, but small
+    /// enough to catch a crashed HWiNFO quickly.
+    /// </summary>
+    public static readonly TimeSpan StaleTimeout = TimeSpan.FromSeconds(30);
+
+    // Staleness tracking. Deliberately NOT reset by Close()/TryOpen(): if HWiNFO dies
+    // ungracefully, our open handle keeps the section (and its valid magic) alive, so a
+    // reconnect can re-open the same frozen data — it must not get a fresh grace period.
+    private long? _lastPollTime;
+    private long _lastPollChangeTimestamp;
 
     public bool IsOpen => _mmf is not null;
 
@@ -94,6 +109,23 @@ public sealed class HwInfoReader : IDisposable
         {
             throw new InvalidDataException(
                 $"Unexpected HWiNFO shared memory magic 0x{magic:X8}. HWiNFO format may have changed.");
+        }
+
+        // HWiNFO only flips the magic to 'DEAD' on a graceful shutdown. If it crashes or
+        // is killed, our open handle keeps the section alive with valid-looking but frozen
+        // data. poll_time is bumped on every sensor poll, so a poll_time that stops moving
+        // means the readings are no longer live.
+        var pollTime = accessor.ReadInt64(OffsetPollTime);
+        if (_lastPollTime != pollTime)
+        {
+            _lastPollTime = pollTime;
+            _lastPollChangeTimestamp = Stopwatch.GetTimestamp();
+        }
+        else if (Stopwatch.GetElapsedTime(_lastPollChangeTimestamp) > StaleTimeout)
+        {
+            throw new InvalidDataException(
+                $"HWiNFO stopped updating sensor data (no change for {StaleTimeout.TotalSeconds:0}+ seconds). " +
+                "It may have crashed or paused polling.");
         }
 
         var entryOffset = accessor.ReadUInt32(OffsetEntrySectionOffset);

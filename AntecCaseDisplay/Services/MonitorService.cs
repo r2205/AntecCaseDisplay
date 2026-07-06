@@ -120,6 +120,9 @@ public sealed class MonitorService : IDisposable
                 lastError = $"HWiNFO read failed: {ex.Message}";
                 Log?.Invoke(lastError);
                 hw.Close();
+                // Don't leave the last frame up as if it were live — show the
+                // display's "missing data" dashes until fresh readings arrive.
+                TrySendBlank(display);
                 EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
                 await Delay(cfg.ReconnectIntervalMs, token);
                 continue;
@@ -191,6 +194,21 @@ public sealed class MonitorService : IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"StatusChanged handler threw: {ex}");
+        }
+    }
+
+    private static void TrySendBlank(AntecDisplay display)
+    {
+        if (!display.IsOpen) return;
+        try
+        {
+            display.Send(null, null);
+        }
+        catch
+        {
+            // If even the blank frame fails, close and let the main loop's
+            // display reconnect path deal with it.
+            display.Close();
         }
     }
 
