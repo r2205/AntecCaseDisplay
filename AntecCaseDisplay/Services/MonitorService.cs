@@ -87,7 +87,7 @@ public sealed class MonitorService : IDisposable
     {
         using var hw = new HwInfoReader();
         using var display = new AntecDisplay();
-        string? lastError = null;
+        var nextDisplayAttempt = DateTime.MinValue;
 
         while (!token.IsCancellationRequested)
         {
@@ -96,16 +96,8 @@ public sealed class MonitorService : IDisposable
 
             if (!hw.IsOpen && !hw.TryOpen())
             {
-                lastError = "HWiNFO shared memory not available. Is HWiNFO64 running with 'Shared Memory Support' enabled?";
-                EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
-                await Delay(cfg.ReconnectIntervalMs, token);
-                continue;
-            }
-
-            if (!display.IsOpen && !display.TryOpen())
-            {
-                lastError = $"Antec Flux Pro display not found (VID=0x{AntecDisplay.VendorId:X4}, PID=0x{AntecDisplay.ProductId:X4}).";
-                EmitStatus(true, false, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
+                EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(),
+                    "HWiNFO shared memory not available. Is HWiNFO64 running with 'Shared Memory Support' enabled?");
                 await Delay(cfg.ReconnectIntervalMs, token);
                 continue;
             }
@@ -117,33 +109,46 @@ public sealed class MonitorService : IDisposable
             }
             catch (Exception ex)
             {
-                lastError = $"HWiNFO read failed: {ex.Message}";
-                Log?.Invoke(lastError);
+                var error = $"HWiNFO read failed: {ex.Message}";
+                Log?.Invoke(error);
                 hw.Close();
-                EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
+                EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), error);
                 await Delay(cfg.ReconnectIntervalMs, token);
                 continue;
             }
 
             var cpu = SensorResolver.Resolve(cfg.Cpu, readings);
             var gpu = SensorResolver.Resolve(cfg.Gpu, readings);
+            string? lastError = null;
 
-            var cpuToSend = ApplyDisplayRounding(cpu.Value, cfg.IntegerTemperatures);
-            var gpuToSend = ApplyDisplayRounding(gpu.Value, cfg.IntegerTemperatures);
-
-            try
+            // The case display is optional for everything else that consumes
+            // readings (dashboard, alerts, tray tooltip), so keep polling HWiNFO
+            // while it's missing and only retry the HID enumeration every
+            // reconnect interval.
+            if (!display.IsOpen && DateTime.UtcNow >= nextDisplayAttempt && !display.TryOpen())
             {
-                display.Send(cpuToSend, gpuToSend);
-                lastError = null;
+                nextDisplayAttempt = DateTime.UtcNow.AddMilliseconds(cfg.ReconnectIntervalMs);
             }
-            catch (Exception ex)
+
+            if (display.IsOpen)
             {
-                lastError = $"Display write failed: {ex.Message}";
-                Log?.Invoke(lastError);
-                display.Close();
-                EmitStatus(true, false, cpu.Value, gpu.Value, cpu.MatchedNames, gpu.MatchedNames, readings, lastError);
-                await Delay(cfg.ReconnectIntervalMs, token);
-                continue;
+                try
+                {
+                    display.Send(
+                        ApplyDisplayRounding(cpu.Value, cfg.IntegerTemperatures),
+                        ApplyDisplayRounding(gpu.Value, cfg.IntegerTemperatures));
+                }
+                catch (Exception ex)
+                {
+                    lastError = $"Display write failed: {ex.Message}";
+                    Log?.Invoke(lastError);
+                    display.Close();
+                    nextDisplayAttempt = DateTime.UtcNow.AddMilliseconds(cfg.ReconnectIntervalMs);
+                }
+            }
+            else
+            {
+                lastError = $"Antec Flux Pro display not found (VID=0x{AntecDisplay.VendorId:X4}, PID=0x{AntecDisplay.ProductId:X4}).";
             }
 
             CheckAlerts(cfg, cpu.Value, gpu.Value);
@@ -153,7 +158,7 @@ public sealed class MonitorService : IDisposable
                 Log?.Invoke($"CPU={Format(cpu.Value)} GPU={Format(gpu.Value)} (cpu matches: {string.Join(", ", cpu.MatchedNames)}; gpu matches: {string.Join(", ", gpu.MatchedNames)})");
             }
 
-            EmitStatus(true, true, cpu.Value, gpu.Value, cpu.MatchedNames, gpu.MatchedNames, readings, null);
+            EmitStatus(true, display.IsOpen, cpu.Value, gpu.Value, cpu.MatchedNames, gpu.MatchedNames, readings, lastError);
 
             await Delay(cfg.UpdateIntervalMs, token);
         }

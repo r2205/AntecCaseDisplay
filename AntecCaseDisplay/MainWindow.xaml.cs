@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -12,16 +13,27 @@ public partial class MainWindow : Window
     private IReadOnlyList<HwInfoReader.Reading> _lastReadings = Array.Empty<HwInfoReader.Reading>();
     private bool _suppressUiEvents = true;
 
+    private static readonly int[] DashHistoryOptions = { 30, 60, 120, 300, 600 };
+    private const int DashMaxColumns = 8;
+    private readonly ObservableCollection<DashboardItem> _dashItems = new();
+    private string[] _dashDevices = Array.Empty<string>();
+
     public MainWindow()
     {
         InitializeComponent();
         _editing = App.Current.Config.Clone();
 
         PopulateStaticCombos();
+        DashItemsGrid.ItemsSource = _dashItems;
         LoadFromConfig();
 
         App.Current.Monitor.StatusChanged += OnMonitorStatus;
-        Closed += (_, _) => App.Current.Monitor.StatusChanged -= OnMonitorStatus;
+        App.Current.DashboardSettingsChanged += OnDashboardSettingsChanged;
+        Closed += (_, _) =>
+        {
+            App.Current.Monitor.StatusChanged -= OnMonitorStatus;
+            App.Current.DashboardSettingsChanged -= OnDashboardSettingsChanged;
+        };
 
         _suppressUiEvents = false;
     }
@@ -41,6 +53,13 @@ public partial class MainWindow : Window
         foreach (var t in Enum.GetValues<AppTheme>())
         {
             ThemeCombo.Items.Add(t);
+        }
+
+        DashColumnsCombo.Items.Add("Auto (fit to window)");
+        for (int i = 1; i <= DashMaxColumns; i++) DashColumnsCombo.Items.Add(i.ToString(CultureInfo.CurrentCulture));
+        foreach (var sec in DashHistoryOptions)
+        {
+            DashHistoryCombo.Items.Add(sec < 60 ? $"{sec} seconds" : sec == 60 ? "1 minute" : $"{sec / 60} minutes");
         }
     }
 
@@ -76,6 +95,15 @@ public partial class MainWindow : Window
             ThemeCombo.SelectedItem        = _editing.Theme;
             AutoStartCheck.IsChecked       = AutoStartService.IsEnabled();
             StartMinimizedCheck.IsChecked  = _editing.StartMinimized;
+
+            var dash = _editing.Dashboard;
+            DashEnabledCheck.IsChecked     = dash.Enabled;
+            DashTopmostCheck.IsChecked     = dash.AlwaysOnTop;
+            DashBorderlessCheck.IsChecked  = dash.Borderless;
+            DashColumnsCombo.SelectedIndex = Math.Clamp(dash.Columns, 0, DashMaxColumns);
+            DashHistoryCombo.SelectedIndex = NearestHistoryIndex(dash.HistorySeconds);
+            _dashItems.Clear();
+            foreach (var item in dash.Items) _dashItems.Add(item);
         }
         finally
         {
@@ -104,6 +132,7 @@ public partial class MainWindow : Window
                     PopulateSensorCombo(CpuSensorCombo, (HwInfoReader.SensorType?)CpuTypeCombo.SelectedItem ?? HwInfoReader.SensorType.Temperature);
                 if (!GpuSensorCombo.IsDropDownOpen)
                     PopulateSensorCombo(GpuSensorCombo, (HwInfoReader.SensorType?)GpuTypeCombo.SelectedItem ?? HwInfoReader.SensorType.Temperature);
+                RefreshDashDevices();
             }
         });
     }
@@ -143,7 +172,113 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnDashboardSettingsChanged()
+    {
+        // Shown/hidden or toggled from the tray or the dashboard's own menu;
+        // reflect that so Save doesn't undo it.
+        var live = App.Current.Config.Dashboard;
+        _editing.Dashboard.Enabled     = live.Enabled;
+        _editing.Dashboard.AlwaysOnTop = live.AlwaysOnTop;
+        _editing.Dashboard.Borderless  = live.Borderless;
+        DashEnabledCheck.IsChecked     = live.Enabled;
+        DashTopmostCheck.IsChecked     = live.AlwaysOnTop;
+        DashBorderlessCheck.IsChecked  = live.Borderless;
+    }
+
+    private static int NearestHistoryIndex(int seconds)
+    {
+        int best = 0;
+        for (int i = 1; i < DashHistoryOptions.Length; i++)
+        {
+            if (Math.Abs(DashHistoryOptions[i] - seconds) < Math.Abs(DashHistoryOptions[best] - seconds)) best = i;
+        }
+        return best;
+    }
+
+    /// <summary>Refills the device picker only when HWiNFO's device list
+    /// actually changes (e.g. HWiNFO restarted), not on every tick.</summary>
+    private void RefreshDashDevices()
+    {
+        if (DashDeviceCombo.IsDropDownOpen) return;
+
+        var devices = _lastReadings.Select(r => r.SensorName).Where(n => n.Length > 0).Distinct().ToArray();
+        if (devices.SequenceEqual(_dashDevices)) return;
+        _dashDevices = devices;
+
+        var previous = DashDeviceCombo.SelectedItem as string;
+        DashDeviceCombo.ItemsSource = devices;
+        DashDeviceCombo.SelectedItem = previous is not null && devices.Contains(previous) ? previous : devices.FirstOrDefault();
+        PopulateDashReadings();
+    }
+
+    private void PopulateDashReadings()
+    {
+        var device = DashDeviceCombo.SelectedItem as string;
+        var previous = DashReadingCombo.SelectedItem as HwInfoReader.Reading?;
+        var readings = _lastReadings.Where(r => r.SensorName == device).ToList();
+        DashReadingCombo.ItemsSource = readings;
+
+        var keep = previous is { } p ? readings.FindIndex(r => r.Type == p.Type && r.OriginalName == p.OriginalName) : -1;
+        DashReadingCombo.SelectedIndex = keep >= 0 ? keep : (readings.Count > 0 ? 0 : -1);
+    }
+
     // ---- event handlers ----
+
+    private void OnDashDeviceChanged(object sender, SelectionChangedEventArgs e)
+    {
+        PopulateDashReadings();
+    }
+
+    private void OnDashAddClicked(object sender, RoutedEventArgs e)
+    {
+        if (DashReadingCombo.SelectedItem is not HwInfoReader.Reading r)
+        {
+            ErrorText.Text = "Pick a reading to add first (HWiNFO must be running to list them).";
+            return;
+        }
+        if (_dashItems.Any(i => i.Matches(r)))
+        {
+            ErrorText.Text = $"\"{r.OriginalName}\" is already on the dashboard.";
+            return;
+        }
+        if (!EndDashGridEdit()) return;
+
+        var item = DashboardItem.FromReading(r);
+        _dashItems.Add(item);
+        DashItemsGrid.SelectedItem = item;
+        DashItemsGrid.ScrollIntoView(item);
+        ErrorText.Text = "Added — Apply to update the dashboard.";
+    }
+
+    private void OnDashMoveUpClicked(object sender, RoutedEventArgs e) => MoveDashItem(-1);
+
+    private void OnDashMoveDownClicked(object sender, RoutedEventArgs e) => MoveDashItem(+1);
+
+    private void MoveDashItem(int delta)
+    {
+        int i = DashItemsGrid.SelectedIndex;
+        int j = i + delta;
+        if (i < 0 || j < 0 || j >= _dashItems.Count || !EndDashGridEdit()) return;
+        _dashItems.Move(i, j);
+        DashItemsGrid.SelectedIndex = j;
+    }
+
+    private void OnDashRemoveClicked(object sender, RoutedEventArgs e)
+    {
+        int i = DashItemsGrid.SelectedIndex;
+        if (i < 0 || !EndDashGridEdit()) return;
+        _dashItems.RemoveAt(i);
+        DashItemsGrid.SelectedIndex = Math.Min(i, _dashItems.Count - 1);
+    }
+
+    /// <summary>Commits an in-progress cell edit; the collection can't be
+    /// reordered mid-edit and Save should pick up what's typed.</summary>
+    private bool EndDashGridEdit()
+    {
+        if (DashItemsGrid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true)) return true;
+        ErrorText.Text = "Fix the highlighted dashboard cell first (numbers only; leave blank to turn a threshold off).";
+        return false;
+    }
 
     private void OnCpuTypeChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -246,6 +381,11 @@ public partial class MainWindow : Window
     private bool TryCommit(out string error)
     {
         error = "";
+        if (!EndDashGridEdit())
+        {
+            error = ErrorText.Text;
+            return false;
+        }
         try
         {
             _editing.Cpu.SensorType   = (HwInfoReader.SensorType)CpuTypeCombo.SelectedItem!;
@@ -273,6 +413,15 @@ public partial class MainWindow : Window
 
             _editing.Theme                  = (AppTheme)ThemeCombo.SelectedItem!;
             _editing.StartMinimized         = StartMinimizedCheck.IsChecked == true;
+
+            var dash = _editing.Dashboard;
+            dash.Enabled                    = DashEnabledCheck.IsChecked == true;
+            dash.AlwaysOnTop                = DashTopmostCheck.IsChecked == true;
+            dash.Borderless                 = DashBorderlessCheck.IsChecked == true;
+            dash.Columns                    = Math.Max(0, DashColumnsCombo.SelectedIndex);
+            dash.HistorySeconds             = DashHistoryOptions[Math.Max(0, DashHistoryCombo.SelectedIndex)];
+            dash.Items                      = _dashItems.ToList();
+            App.Current.CaptureDashboardPlacement(dash);
 
             // Persist + apply
             _editing.Save(Config.DefaultPath);

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using AntecCaseDisplay.Dashboard;
 using AntecCaseDisplay.Services;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
@@ -19,6 +20,8 @@ public partial class App : Application
     private MonitorService? _monitor;
     private LogService? _log;
     private MainWindow? _settingsWindow;
+    private DashboardWindow? _dashboard;
+    private bool _exiting;
     private Config _config = new();
 
     public Config Config
@@ -30,6 +33,7 @@ public partial class App : Application
             _monitor?.UpdateConfig(value);
             _log?.Configure(value.LoggingEnabled, value.LogPath);
             ThemeManager.Apply(value.Theme);
+            ApplyDashboard();
         }
     }
 
@@ -93,10 +97,25 @@ public partial class App : Application
             });
         };
 
+        ApplyDashboard();
+
         if (!_config.StartMinimized)
         {
             ShowSettingsWindow();
         }
+    }
+
+    private void OnSessionEnding(object sender, SessionEndingCancelEventArgs e)
+    {
+        // Windows is closing us: the dashboard's Closed handler must not
+        // record that the user turned it off.
+        _exiting = true;
+    }
+
+    public void Quit()
+    {
+        _exiting = true;
+        Shutdown();
     }
 
     private void OnExit(object sender, ExitEventArgs e)
@@ -158,6 +177,110 @@ public partial class App : Application
         catch (Exception ex)
         {
             ReportFatal("settings window", ex);
+        }
+    }
+
+    // ---- dashboard ----
+
+    public bool IsDashboardOpen => _dashboard is not null;
+
+    /// <summary>Raised when dashboard settings change outside the settings
+    /// window, so an open settings window can keep its checkboxes in sync.</summary>
+    public event Action? DashboardSettingsChanged;
+
+    /// <summary>Opens or closes the dashboard and remembers the choice.</summary>
+    public void SetDashboardVisible(bool visible)
+    {
+        // Deferred for the same tray-menu reason as ShowSettingsWindow.
+        Dispatcher.BeginInvoke(new Action(() => UpdateDashboardSettings(d => d.Enabled = visible)),
+            DispatcherPriority.Background);
+    }
+
+    /// <summary>Tweaks dashboard settings outside the settings window (tray
+    /// menu, the dashboard's own context menu), persists and applies them.</summary>
+    public void UpdateDashboardSettings(Action<DashboardConfig> change)
+    {
+        change(_config.Dashboard);
+        _dashboard?.SavePlacement(_config.Dashboard);
+        SaveConfigQuietly();
+        ApplyDashboard();
+        DashboardSettingsChanged?.Invoke();
+    }
+
+    /// <summary>Copies the live window position into a config about to be
+    /// saved, so saving settings doesn't rewind a moved dashboard.</summary>
+    public void CaptureDashboardPlacement(DashboardConfig target)
+    {
+        if (_dashboard is not null)
+        {
+            _dashboard.SavePlacement(target);
+            return;
+        }
+        var live = _config.Dashboard;
+        target.Left = live.Left;
+        target.Top = live.Top;
+        target.Width = live.Width;
+        target.Height = live.Height;
+        target.Maximized = live.Maximized;
+    }
+
+    private void ApplyDashboard()
+    {
+        try
+        {
+            if (!_config.Dashboard.Enabled)
+            {
+                _dashboard?.Close();
+                return;
+            }
+
+            if (_dashboard is null)
+            {
+                _dashboard = new DashboardWindow(_config);
+                _dashboard.Closing += OnDashboardClosing;
+                _dashboard.Closed += OnDashboardClosed;
+                _dashboard.Show();
+            }
+            else
+            {
+                _dashboard.ApplyConfig(_config);
+            }
+        }
+        catch (Exception ex)
+        {
+            ReportFatal("dashboard window", ex);
+        }
+    }
+
+    private void OnDashboardClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        // RestoreBounds (needed when maximised) is gone once the window has closed.
+        (sender as DashboardWindow)?.SavePlacement(_config.Dashboard);
+    }
+
+    private void OnDashboardClosed(object? sender, EventArgs e)
+    {
+        if (sender is not DashboardWindow window) return;
+        window.Closing -= OnDashboardClosing;
+        window.Closed -= OnDashboardClosed;
+        if (ReferenceEquals(_dashboard, window)) _dashboard = null;
+
+        // Closed by the user (window menu, Alt+F4, tray) rather than by
+        // quitting: keep it closed next launch too.
+        if (!_exiting) _config.Dashboard.Enabled = false;
+        SaveConfigQuietly();
+        DashboardSettingsChanged?.Invoke();
+    }
+
+    private void SaveConfigQuietly()
+    {
+        try
+        {
+            _config.Save(Config.DefaultPath);
+        }
+        catch (Exception ex)
+        {
+            _log?.Write($"Could not save settings: {ex.Message}");
         }
     }
 
