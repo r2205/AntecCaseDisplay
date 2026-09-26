@@ -147,12 +147,15 @@
                 <GroupBox Header="Dashboard window">
                     <StackPanel>
                         <TextBlock Style="{StaticResource HintText}" Margin="0,0,0,6"
-                                   Text="A live view of any HWiNFO readings, e.g. on a second monitor while gaming. Drag to move, double-click or F11 to maximise, right-click for options. Also toggled from the tray menu."/>
+                                   Text="A live view of any HWiNFO readings, e.g. on a second monitor while gaming. Drag to move, double-click or F11 to maximise, right-click for options. Also toggled from the tray menu. Changes here show on the dashboard straight away; Apply or Save to keep them, Cancel to undo."/>
 
                         <WrapPanel>
-                            <CheckBox x:Name="DashEnabledCheck" Content="Show dashboard" Margin="0,3,24,3"/>
-                            <CheckBox x:Name="DashTopmostCheck" Content="Always on top" Margin="0,3,24,3"/>
-                            <CheckBox x:Name="DashBorderlessCheck" Content="Borderless" Margin="0,3,24,3"/>
+                            <CheckBox x:Name="DashEnabledCheck" Content="Show dashboard" Margin="0,3,24,3"
+                                      Checked="OnDashSettingChanged" Unchecked="OnDashSettingChanged"/>
+                            <CheckBox x:Name="DashTopmostCheck" Content="Always on top" Margin="0,3,24,3"
+                                      Checked="OnDashSettingChanged" Unchecked="OnDashSettingChanged"/>
+                            <CheckBox x:Name="DashBorderlessCheck" Content="Borderless" Margin="0,3,24,3"
+                                      Checked="OnDashSettingChanged" Unchecked="OnDashSettingChanged"/>
                         </WrapPanel>
 
                         <Grid Margin="0,6,0,0">
@@ -166,10 +169,12 @@
                             </Grid.RowDefinitions>
 
                             <Label Grid.Row="0" Grid.Column="0" Content="Columns:"/>
-                            <ComboBox Grid.Row="0" Grid.Column="1" x:Name="DashColumnsCombo" Margin="0,2"/>
+                            <ComboBox Grid.Row="0" Grid.Column="1" x:Name="DashColumnsCombo" Margin="0,2"
+                                      SelectionChanged="OnDashSettingChanged"/>
 
                             <Label Grid.Row="1" Grid.Column="0" Content="Chart history:"/>
-                            <ComboBox Grid.Row="1" Grid.Column="1" x:Name="DashHistoryCombo" Margin="0,2"/>
+                            <ComboBox Grid.Row="1" Grid.Column="1" x:Name="DashHistoryCombo" Margin="0,2"
+                                      SelectionChanged="OnDashSettingChanged"/>
                         </Grid>
 
                         <TextBlock Text="Add a reading" FontWeight="SemiBold" Margin="0,12,0,4"/>
@@ -200,6 +205,7 @@
                         </Grid>
 
                         <DataGrid x:Name="DashItemsGrid" Margin="0,8,0,0" MaxHeight="300" MinHeight="80"
+                                  CellEditEnding="OnDashCellEditEnding"
                                   AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                   CanUserSortColumns="False" CanUserReorderColumns="False"
                                   CanUserResizeRows="False" HeadersVisibility="Column"

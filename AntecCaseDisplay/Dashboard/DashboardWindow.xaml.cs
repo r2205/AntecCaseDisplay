@@ -16,11 +16,11 @@ public partial class DashboardWindow : Window
     private int _configuredColumns;
     private bool? _borderless;
 
-    public DashboardWindow(Config config)
+    public DashboardWindow(DashboardConfig settings, int updateIntervalMs)
     {
         InitializeComponent();
-        RestorePlacement(config.Dashboard);
-        ApplyConfig(config);
+        RestorePlacement(settings);
+        ApplyConfig(settings, updateIntervalMs);
 
         TilesHost.SizeChanged += (_, _) => UpdateLayoutMetrics();
         StateChanged += (_, _) => UpdateMaximizedMargin();
@@ -29,10 +29,10 @@ public partial class DashboardWindow : Window
         Closed += (_, _) => App.Current.Monitor.StatusChanged -= OnMonitorStatus;
     }
 
-    public void ApplyConfig(Config config)
+    /// <param name="updateIntervalMs">Monitor refresh interval, to size the
+    /// sparkline history.</param>
+    public void ApplyConfig(DashboardConfig d, int updateIntervalMs)
     {
-        var d = config.Dashboard;
-
         Topmost = d.AlwaysOnTop;
         TopmostMenuItem.IsChecked = d.AlwaysOnTop;
         BorderlessMenuItem.IsChecked = d.Borderless;
@@ -41,7 +41,7 @@ public partial class DashboardWindow : Window
 
         // Keep each tile's history when only its presentation changed.
         var capacity = Math.Clamp(
-            (int)(d.HistorySeconds * 1000L / Math.Max(50, config.UpdateIntervalMs)), 10, MaxHistorySamples);
+            (int)(d.HistorySeconds * 1000L / Math.Max(50, updateIntervalMs)), 10, MaxHistorySamples);
         var oldHistory = new Dictionary<(HwInfoReader.SensorType, string, string), SampleBuffer>();
         foreach (var t in _tiles)
         {

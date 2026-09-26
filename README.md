@@ -110,7 +110,11 @@ To set it up, open settings → **Dashboard window**:
    *Amber at* / *Red at* thresholds, or *Bar max* (the bar's full-scale
    value; blank hides the bar). Temperatures default to 80 / 90 with a
    0–100 bar; usage readings get a 0–100 bar.
-3. Tick **Show dashboard** and click **Apply**.
+3. Tick **Show dashboard**.
+
+Changes in this section show on the dashboard straight away as a preview,
+like the theme picker. **Apply** or **Save & Close** keeps them; **Cancel**
+(or closing the settings window) puts the dashboard back how it was.
 
 In the dashboard window: drag anywhere to move it, double-click or press
 **F11** to maximise it (fills the whole monitor when borderless), and

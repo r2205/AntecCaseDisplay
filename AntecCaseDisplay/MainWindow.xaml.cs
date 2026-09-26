@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using AntecCaseDisplay.Services;
 using Microsoft.Win32;
 
@@ -26,6 +27,7 @@ public partial class MainWindow : Window
         PopulateStaticCombos();
         DashItemsGrid.ItemsSource = _dashItems;
         LoadFromConfig();
+        _dashItems.CollectionChanged += (_, _) => PreviewDashboard();
 
         App.Current.Monitor.StatusChanged += OnMonitorStatus;
         App.Current.DashboardSettingsChanged += OnDashboardSettingsChanged;
@@ -33,6 +35,8 @@ public partial class MainWindow : Window
         {
             App.Current.Monitor.StatusChanged -= OnMonitorStatus;
             App.Current.DashboardSettingsChanged -= OnDashboardSettingsChanged;
+            // Saved or not, the dashboard goes back to what's on disk.
+            App.Current.PreviewDashboard(null);
         };
 
         _suppressUiEvents = false;
@@ -175,14 +179,43 @@ public partial class MainWindow : Window
     private void OnDashboardSettingsChanged()
     {
         // Shown/hidden or toggled from the tray or the dashboard's own menu;
-        // reflect that so Save doesn't undo it.
+        // reflect that so Save doesn't undo it (the checkboxes then re-preview).
         var live = App.Current.Config.Dashboard;
-        _editing.Dashboard.Enabled     = live.Enabled;
-        _editing.Dashboard.AlwaysOnTop = live.AlwaysOnTop;
-        _editing.Dashboard.Borderless  = live.Borderless;
         DashEnabledCheck.IsChecked     = live.Enabled;
         DashTopmostCheck.IsChecked     = live.AlwaysOnTop;
         DashBorderlessCheck.IsChecked  = live.Borderless;
+    }
+
+    /// <summary>Dashboard settings as currently shown in this window.</summary>
+    private DashboardConfig ReadDashboardFromUi()
+    {
+        var dash = new DashboardConfig
+        {
+            Enabled        = DashEnabledCheck.IsChecked == true,
+            AlwaysOnTop    = DashTopmostCheck.IsChecked == true,
+            Borderless     = DashBorderlessCheck.IsChecked == true,
+            Columns        = Math.Max(0, DashColumnsCombo.SelectedIndex),
+            HistorySeconds = DashHistoryOptions[Math.Max(0, DashHistoryCombo.SelectedIndex)],
+            Items          = _dashItems.ToList(),
+        };
+        App.Current.CaptureDashboardPlacement(dash);
+        return dash;
+    }
+
+    /// <summary>Shows unsaved dashboard edits on the dashboard right away.</summary>
+    private void PreviewDashboard()
+    {
+        if (_suppressUiEvents) return;
+        App.Current.PreviewDashboard(ReadDashboardFromUi());
+    }
+
+    private void OnDashSettingChanged(object sender, RoutedEventArgs e) => PreviewDashboard();
+
+    private void OnDashCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+    {
+        // The edited value reaches the item only after this event; preview once it has.
+        if (e.EditAction == DataGridEditAction.Commit)
+            Dispatcher.BeginInvoke(new Action(PreviewDashboard), DispatcherPriority.Background);
     }
 
     private static int NearestHistoryIndex(int seconds)
@@ -247,7 +280,7 @@ public partial class MainWindow : Window
         _dashItems.Add(item);
         DashItemsGrid.SelectedItem = item;
         DashItemsGrid.ScrollIntoView(item);
-        ErrorText.Text = "Added — Apply to update the dashboard.";
+        ErrorText.Text = "Added — Apply or Save to keep it.";
     }
 
     private void OnDashMoveUpClicked(object sender, RoutedEventArgs e) => MoveDashItem(-1);
@@ -414,14 +447,7 @@ public partial class MainWindow : Window
             _editing.Theme                  = (AppTheme)ThemeCombo.SelectedItem!;
             _editing.StartMinimized         = StartMinimizedCheck.IsChecked == true;
 
-            var dash = _editing.Dashboard;
-            dash.Enabled                    = DashEnabledCheck.IsChecked == true;
-            dash.AlwaysOnTop                = DashTopmostCheck.IsChecked == true;
-            dash.Borderless                 = DashBorderlessCheck.IsChecked == true;
-            dash.Columns                    = Math.Max(0, DashColumnsCombo.SelectedIndex);
-            dash.HistorySeconds             = DashHistoryOptions[Math.Max(0, DashHistoryCombo.SelectedIndex)];
-            dash.Items                      = _dashItems.ToList();
-            App.Current.CaptureDashboardPlacement(dash);
+            _editing.Dashboard              = ReadDashboardFromUi();
 
             // Persist + apply
             _editing.Save(Config.DefaultPath);

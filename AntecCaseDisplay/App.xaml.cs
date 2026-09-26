@@ -21,6 +21,8 @@ public partial class App : Application
     private LogService? _log;
     private MainWindow? _settingsWindow;
     private DashboardWindow? _dashboard;
+    private DashboardConfig? _dashboardPreview;
+    private bool _applyingDashboard;
     private bool _exiting;
     private Config _config = new();
 
@@ -33,6 +35,7 @@ public partial class App : Application
             _monitor?.UpdateConfig(value);
             _log?.Configure(value.LoggingEnabled, value.LogPath);
             ThemeManager.Apply(value.Theme);
+            _dashboardPreview = null; // now saved
             ApplyDashboard();
         }
     }
@@ -207,6 +210,15 @@ public partial class App : Application
         DashboardSettingsChanged?.Invoke();
     }
 
+    /// <summary>Shows unsaved dashboard settings from the settings window
+    /// live, like the theme preview. Pass null to go back to the saved ones
+    /// (Cancel / window closed).</summary>
+    public void PreviewDashboard(DashboardConfig? preview)
+    {
+        _dashboardPreview = preview;
+        ApplyDashboard();
+    }
+
     /// <summary>Copies the live window position into a config about to be
     /// saved, so saving settings doesn't rewind a moved dashboard.</summary>
     public void CaptureDashboardPlacement(DashboardConfig target)
@@ -226,9 +238,12 @@ public partial class App : Application
 
     private void ApplyDashboard()
     {
+        if (_exiting) return; // windows closing during shutdown mustn't reopen it
+        var settings = _dashboardPreview ?? _config.Dashboard;
+        _applyingDashboard = true;
         try
         {
-            if (!_config.Dashboard.Enabled)
+            if (!settings.Enabled)
             {
                 _dashboard?.Close();
                 return;
@@ -236,19 +251,23 @@ public partial class App : Application
 
             if (_dashboard is null)
             {
-                _dashboard = new DashboardWindow(_config);
+                _dashboard = new DashboardWindow(settings, _config.UpdateIntervalMs);
                 _dashboard.Closing += OnDashboardClosing;
                 _dashboard.Closed += OnDashboardClosed;
                 _dashboard.Show();
             }
             else
             {
-                _dashboard.ApplyConfig(_config);
+                _dashboard.ApplyConfig(settings, _config.UpdateIntervalMs);
             }
         }
         catch (Exception ex)
         {
             ReportFatal("dashboard window", ex);
+        }
+        finally
+        {
+            _applyingDashboard = false;
         }
     }
 
@@ -265,11 +284,15 @@ public partial class App : Application
         window.Closed -= OnDashboardClosed;
         if (ReferenceEquals(_dashboard, window)) _dashboard = null;
 
-        // Closed by the user (window menu, Alt+F4, tray) rather than by
-        // quitting: keep it closed next launch too.
-        if (!_exiting) _config.Dashboard.Enabled = false;
+        // Closed by the user (window menu, Alt+F4) rather than by quitting or
+        // by ApplyDashboard (tray toggle, settings preview, which report
+        // their own changes): keep it closed next launch too.
+        if (!_exiting && !_applyingDashboard)
+        {
+            _config.Dashboard.Enabled = false;
+            DashboardSettingsChanged?.Invoke();
+        }
         SaveConfigQuietly();
-        DashboardSettingsChanged?.Invoke();
     }
 
     private void SaveConfigQuietly()
