@@ -61,7 +61,11 @@ public sealed class MonitorService : IDisposable
             if (_runTask is { IsCompleted: false }) return;
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
-            _runTask = Task.Run(() => RunAsync(token), token);
+            // A dedicated thread rather than the thread pool, so it can run
+            // at raised priority (see ProcessPriorityService) and keeps
+            // sending frames when every core is pinned.
+            _runTask = Task.Factory.StartNew(() => Run(token), token,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
     }
 
@@ -83,22 +87,36 @@ public sealed class MonitorService : IDisposable
         }
     }
 
-    private async Task RunAsync(CancellationToken token)
+    private void Run(CancellationToken token)
     {
         using var hw = new HwInfoReader();
         using var display = new AntecDisplay();
         var nextDisplayAttempt = DateTime.MinValue;
+        var sinceLastTick = Stopwatch.StartNew();
+        var expectedGapMs = 0;
 
         while (!token.IsCancellationRequested)
         {
             Config cfg;
             lock (_lock) { cfg = _config; }
 
+            var priority = cfg.HighPriority ? ThreadPriority.Highest : ThreadPriority.Normal;
+            if (Thread.CurrentThread.Priority != priority) Thread.CurrentThread.Priority = priority;
+
+            // Leave a trail for "display blanked / dashboard froze" reports:
+            // a late tick means we weren't scheduled (CPU starved).
+            var gapMs = sinceLastTick.ElapsedMilliseconds;
+            if (expectedGapMs > 0 && gapMs > expectedGapMs + 2000)
+            {
+                Log?.Invoke($"Update loop ran {gapMs - expectedGapMs} ms late (CPU starved?).");
+            }
+            sinceLastTick.Restart();
+
             if (!hw.IsOpen && !hw.TryOpen())
             {
                 EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(),
                     "HWiNFO shared memory not available. Is HWiNFO64 running with 'Shared Memory Support' enabled?");
-                await Delay(cfg.ReconnectIntervalMs, token);
+                expectedGapMs = Wait(cfg.ReconnectIntervalMs, token);
                 continue;
             }
 
@@ -113,7 +131,7 @@ public sealed class MonitorService : IDisposable
                 Log?.Invoke(error);
                 hw.Close();
                 EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), error);
-                await Delay(cfg.ReconnectIntervalMs, token);
+                expectedGapMs = Wait(cfg.ReconnectIntervalMs, token);
                 continue;
             }
 
@@ -160,7 +178,7 @@ public sealed class MonitorService : IDisposable
 
             EmitStatus(true, display.IsOpen, cpu.Value, gpu.Value, cpu.MatchedNames, gpu.MatchedNames, readings, lastError);
 
-            await Delay(cfg.UpdateIntervalMs, token);
+            expectedGapMs = Wait(cfg.UpdateIntervalMs, token);
         }
     }
 
@@ -205,10 +223,14 @@ public sealed class MonitorService : IDisposable
         return integer ? Math.Round(value.Value, 0, MidpointRounding.AwayFromZero) : value;
     }
 
-    private static async Task Delay(int ms, CancellationToken ct)
+    /// <summary>Sleeps on this thread (returns early on stop) and returns
+    /// the delay used. Deliberately not Task.Delay: its continuation would
+    /// resume on a normal-priority thread-pool thread.</summary>
+    private static int Wait(int ms, CancellationToken ct)
     {
-        try { await Task.Delay(Math.Max(50, ms), ct); }
-        catch (TaskCanceledException) { /* expected on stop */ }
+        ms = Math.Max(50, ms);
+        ct.WaitHandle.WaitOne(ms);
+        return ms;
     }
 
     private static string Format(double? v) => v is null ? "--" : v.Value.ToString("F1");

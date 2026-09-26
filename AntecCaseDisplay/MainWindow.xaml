@@ -246,6 +246,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <Label Grid.Row="0" Grid.Column="0" Content="Refresh interval:"/>
@@ -268,6 +269,13 @@
                         <CheckBox Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3"
                                   x:Name="VerboseCheck" Margin="0,4,0,0"
                                   Content="Verbose logging (per-frame log lines)"/>
+
+                        <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,4,0,0">
+                            <CheckBox x:Name="HighPriorityCheck"
+                                      Content="Keep updating under full CPU load (above-normal priority)"/>
+                            <TextBlock Style="{StaticResource HintText}"
+                                       Text="Stops the case display blanking and the dashboard freezing during stress tests or shader compilation. The app uses well under 1% CPU, so games aren't affected."/>
+                        </StackPanel>
                     </Grid>
                 </GroupBox>
 

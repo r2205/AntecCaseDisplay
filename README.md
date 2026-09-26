@@ -77,6 +77,12 @@ dotnet publish AntecCaseDisplay\AntecCaseDisplay.csproj -c Release -r win-x64 `
     display disappears)
   - *Round to whole degrees* — sends X.0 instead of X.Y
   - *Verbose logging* — one log line per frame
+  - *Keep updating under full CPU load* (on by default) — runs the app at
+    above-normal priority and opts it out of Windows 11's efficiency mode, so
+    the case display doesn't blank and the dashboard doesn't freeze during
+    stress tests or shader compilation. The app uses well under 1% CPU, so
+    this doesn't slow games down. With logging on, any update that still runs
+    late is logged as `Update loop ran … ms late`.
 - **Alerts** — enable, with a cooldown to avoid spam
 - **Logging** — write events to a file (auto-rotates at 5 MB, keeps one
   backup as `name.log.1`)

@@ -34,6 +34,7 @@ public partial class App : Application
             _config = value;
             _monitor?.UpdateConfig(value);
             _log?.Configure(value.LoggingEnabled, value.LogPath);
+            ProcessPriorityService.Apply(value.HighPriority, msg => _log?.Write(msg));
             ThemeManager.Apply(value.Theme);
             _dashboardPreview = null; // now saved
             ApplyDashboard();
@@ -80,6 +81,7 @@ public partial class App : Application
 
         _log = new LogService();
         _log.Configure(_config.LoggingEnabled, _config.LogPath);
+        ProcessPriorityService.Apply(_config.HighPriority, msg => _log?.Write(msg));
 
         _monitor = new MonitorService(_config);
         _monitor.Log += msg => _log?.Write(msg);

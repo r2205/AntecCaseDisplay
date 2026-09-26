@@ -89,6 +89,7 @@ public partial class MainWindow : Window
             ReconnectBox.Text           = _editing.ReconnectIntervalMs.ToString(CultureInfo.InvariantCulture);
             IntegerCheck.IsChecked      = _editing.IntegerTemperatures;
             VerboseCheck.IsChecked      = _editing.Verbose;
+            HighPriorityCheck.IsChecked = _editing.HighPriority;
 
             AlertsEnabledCheck.IsChecked = _editing.AlertsEnabled;
             AlertCooldownBox.Text        = _editing.AlertMinIntervalSeconds.ToString(CultureInfo.InvariantCulture);
@@ -437,6 +438,7 @@ public partial class MainWindow : Window
             _editing.ReconnectIntervalMs    = (int)ParseDouble(ReconnectBox.Text, 5000);
             _editing.IntegerTemperatures    = IntegerCheck.IsChecked == true;
             _editing.Verbose                = VerboseCheck.IsChecked == true;
+            _editing.HighPriority           = HighPriorityCheck.IsChecked == true;
 
             _editing.AlertsEnabled          = AlertsEnabledCheck.IsChecked == true;
             _editing.AlertMinIntervalSeconds= (int)ParseDouble(AlertCooldownBox.Text, 60);

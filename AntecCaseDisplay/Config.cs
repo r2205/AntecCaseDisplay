@@ -179,6 +179,12 @@ public sealed class Config
     [JsonPropertyName("updateIntervalMs")]
     public int UpdateIntervalMs { get; set; } = 1000;
 
+    /// <summary>Run at above-normal priority (and opt out of Windows'
+    /// efficiency mode) so the display and dashboard keep updating when a
+    /// game or stress test saturates every core.</summary>
+    [JsonPropertyName("highPriority")]
+    public bool HighPriority { get; set; } = true;
+
     [JsonPropertyName("reconnectIntervalMs")]
     public int ReconnectIntervalMs { get; set; } = 5000;
 
