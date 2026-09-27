@@ -15,8 +15,8 @@ interface. Replacement for Antec's iUnity software.
 - Threshold alerts via tray notifications, with a per-alert cooldown
 - Optional log file (auto-rotates at 5 MB)
 - Optional **dashboard window** for a second monitor: pick any HWiNFO
-  readings and see them as live tiles with sparklines, colour thresholds and
-  usage bars
+  readings and see them as live tiles with sparklines, colour thresholds,
+  usage bars and per-hardware colours (CPU, GPU, storage, ...)
 - Light / Dark / System theme
 - Optional "start with Windows" and "start minimised"
 - Pause / Resume from the tray menu without quitting
@@ -117,6 +117,17 @@ To set it up, open settings → **Dashboard window**:
    value; blank hides the bar). Temperatures default to 80 / 90 with a
    0–100 bar; usage readings get a 0–100 bar.
 3. Tick **Show dashboard**.
+
+Tiles are colour-coded by the hardware they belong to — CPU, GPU,
+Motherboard, Memory, Storage, Network or Other — so readings from different
+devices are easy to tell apart. The hardware is worked out from HWiNFO's
+device name (`CPU [#0]: …`, `GPU [#0]: …`, `S.M.A.R.T.: …`, the board's
+Super I/O chip, …); if a guess is wrong, double-click the tile's
+**Hardware** cell in the table and pick the right one. Under
+**Hardware colours** choose how much colour to use (*Off*, a *Colour strip*
+down the tile's edge, or *Colour strip, chart and bar*) and pick a colour for
+each kind of hardware; **Default colours** puts them back. Amber / red
+threshold colours still take over the chart and bar when a reading gets hot.
 
 Changes in this section show on the dashboard straight away as a preview,
 like the theme picker. **Apply** or **Save & Close** keeps them; **Cancel**

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Windows.Media;
 
 namespace AntecCaseDisplay.Dashboard;
 
@@ -28,11 +29,17 @@ public sealed class DashboardTile : INotifyPropertyChanged
 
     /// <param name="history">Passed in so a tile rebuilt after a settings
     /// change (new caption, thresholds, ...) keeps its chart.</param>
-    public DashboardTile(DashboardItem item, SampleBuffer history)
+    /// <param name="hardwareBrush">Frozen brush for the tile's hardware
+    /// category; ignored when <paramref name="colorMode"/> is Off.</param>
+    public DashboardTile(DashboardItem item, SampleBuffer history, Brush hardwareBrush, HardwareColorMode colorMode)
     {
         Item = item;
         History = history;
         Label = string.IsNullOrWhiteSpace(item.Label) ? item.ReadingName : item.Label;
+        HardwareBrush = hardwareBrush;
+        HardwareName = HardwareCategories.DisplayName(item.ResolvedHardware);
+        ShowHardwareStrip = colorMode != HardwareColorMode.Off;
+        ColorChartByHardware = colorMode == HardwareColorMode.Full;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -41,6 +48,12 @@ public sealed class DashboardTile : INotifyPropertyChanged
     public string Label { get; }
     public SampleBuffer History { get; }
     public bool HasBar => Item.BarMax is > 0;
+
+    // Fixed for the tile's lifetime: a colour change in settings rebuilds the tiles.
+    public Brush HardwareBrush { get; }
+    public string HardwareName { get; }
+    public bool ShowHardwareStrip { get; }
+    public bool ColorChartByHardware { get; }
 
     /// <summary>Usage readings are percentages; pin the chart to 0-100 so a
     /// 3% blip doesn't fill the tile.</summary>

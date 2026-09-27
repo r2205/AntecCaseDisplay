@@ -48,6 +48,10 @@ public partial class DashboardWindow : Window
             if (t.History.Capacity == capacity) oldHistory.TryAdd(TileKey(t.Item), t.History);
         }
 
+        // One shared frozen brush per hardware category.
+        var hardwareBrushes = HardwareCategories.All.ToDictionary(
+            c => c, c => (Brush)HardwareCategories.CreateBrush(d.ColorFor(c))!);
+
         var tiles = new List<DashboardTile>(d.Items.Count);
         var index = new Dictionary<(HwInfoReader.SensorType, string, string), int>();
         foreach (var item in d.Items)
@@ -55,7 +59,8 @@ public partial class DashboardWindow : Window
             var key = TileKey(item);
             if (!index.TryAdd(key, tiles.Count)) continue; // duplicate entry in the JSON
             tiles.Add(new DashboardTile(item,
-                oldHistory.TryGetValue(key, out var h) ? h : new SampleBuffer(capacity)));
+                oldHistory.TryGetValue(key, out var h) ? h : new SampleBuffer(capacity),
+                hardwareBrushes[item.ResolvedHardware], d.HardwareColorMode));
         }
 
         _tiles = tiles.ToArray();

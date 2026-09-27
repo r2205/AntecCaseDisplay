@@ -18,6 +18,14 @@ public partial class MainWindow : Window
     private const int DashMaxColumns = 8;
     private readonly ObservableCollection<DashboardItem> _dashItems = new();
     private string[] _dashDevices = Array.Empty<string>();
+    private HardwareColorChoice[] _dashColors = Array.Empty<HardwareColorChoice>();
+
+    /// <summary>Choices for the dashboard table's Hardware column.</summary>
+    public static IReadOnlyList<HardwareChoice> HardwareChoices { get; } =
+        HardwareCategories.All
+            .Select(c => new HardwareChoice(HardwareCategories.DisplayName(c), c))
+            .Prepend(new HardwareChoice("Auto (from device name)", HardwareCategory.Auto))
+            .ToArray();
 
     public MainWindow()
     {
@@ -65,6 +73,11 @@ public partial class MainWindow : Window
         {
             DashHistoryCombo.Items.Add(sec < 60 ? $"{sec} seconds" : sec == 60 ? "1 minute" : $"{sec / 60} minutes");
         }
+
+        // Same order as HardwareColorMode, so SelectedIndex is the enum value.
+        DashColorModeCombo.Items.Add("Off (theme accent only)");
+        DashColorModeCombo.Items.Add("Colour strip");
+        DashColorModeCombo.Items.Add("Colour strip, chart and bar");
     }
 
     private void LoadFromConfig()
@@ -107,6 +120,9 @@ public partial class MainWindow : Window
             DashBorderlessCheck.IsChecked  = dash.Borderless;
             DashColumnsCombo.SelectedIndex = Math.Clamp(dash.Columns, 0, DashMaxColumns);
             DashHistoryCombo.SelectedIndex = NearestHistoryIndex(dash.HistorySeconds);
+            DashColorModeCombo.SelectedIndex = (int)(Enum.IsDefined(dash.HardwareColorMode)
+                ? dash.HardwareColorMode : HardwareColorMode.Full);
+            LoadDashColors(dash.ColorFor);
             _dashItems.Clear();
             foreach (var item in dash.Items) _dashItems.Add(item);
         }
@@ -197,6 +213,8 @@ public partial class MainWindow : Window
             Borderless     = DashBorderlessCheck.IsChecked == true,
             Columns        = Math.Max(0, DashColumnsCombo.SelectedIndex),
             HistorySeconds = DashHistoryOptions[Math.Max(0, DashHistoryCombo.SelectedIndex)],
+            HardwareColorMode = (HardwareColorMode)Math.Max(0, DashColorModeCombo.SelectedIndex),
+            HardwareColors = _dashColors.ToDictionary(c => c.Category, c => c.Selected.Hex),
             Items          = _dashItems.ToList(),
         };
         App.Current.CaptureDashboardPlacement(dash);
@@ -217,6 +235,56 @@ public partial class MainWindow : Window
         // The edited value reaches the item only after this event; preview once it has.
         if (e.EditAction == DataGridEditAction.Commit)
             Dispatcher.BeginInvoke(new Action(PreviewDashboard), DispatcherPriority.Background);
+    }
+
+    private void OnDashHardwareComboLoaded(object sender, RoutedEventArgs e)
+    {
+        // Open straight away, so changing a tile's hardware is a double-click and a pick.
+        if (sender is ComboBox combo)
+        {
+            combo.Focus();
+            combo.IsDropDownOpen = true;
+        }
+    }
+
+    private void OnDashHardwarePicked(object sender, SelectionChangedEventArgs e)
+    {
+        // Nothing removed = the binding's initial selection, not the user.
+        if (e.RemovedItems.Count == 0) return;
+        // Leave edit mode once picked, so the table and dashboard update
+        // without having to click elsewhere first.
+        Dispatcher.BeginInvoke(new Action(() => DashItemsGrid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true)),
+            DispatcherPriority.Input);
+    }
+
+    private void LoadDashColors(Func<HardwareCategory, string> colorFor)
+    {
+        _dashColors = HardwareCategories.All.Select(c => new HardwareColorChoice(c, colorFor(c))).ToArray();
+        DashHardwareColorsHost.ItemsSource = _dashColors;
+    }
+
+    private void OnDashColorModeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        DashColorsPanel.IsEnabled = DashColorModeCombo.SelectedIndex != (int)HardwareColorMode.Off;
+        PreviewDashboard();
+    }
+
+    private void OnDashColorPicked(object sender, SelectionChangedEventArgs e)
+    {
+        // Nothing removed = the initial selection as the picker is created.
+        if (e.RemovedItems.Count == 0 ||
+            sender is not ComboBox { DataContext: HardwareColorChoice choice, SelectedItem: ColorSwatch swatch })
+        {
+            return;
+        }
+        choice.Selected = swatch;
+        PreviewDashboard();
+    }
+
+    private void OnDashResetColorsClicked(object sender, RoutedEventArgs e)
+    {
+        LoadDashColors(HardwareCategories.DefaultColor);
+        PreviewDashboard();
     }
 
     private static int NearestHistoryIndex(int seconds)
