@@ -14,6 +14,9 @@ interface. Replacement for Antec's iUnity software.
 - Optional integer-only display (no decimals)
 - Threshold alerts via tray notifications, with a per-alert cooldown
 - Optional log file (auto-rotates at 5 MB)
+- Optional **dashboard window** for a second monitor: pick any HWiNFO
+  readings and see them as live tiles with sparklines, colour thresholds and
+  usage bars
 - Light / Dark / System theme
 - Optional "start with Windows" and "start minimised"
 - Pause / Resume from the tray menu without quitting
@@ -74,18 +77,68 @@ dotnet publish AntecCaseDisplay\AntecCaseDisplay.csproj -c Release -r win-x64 `
     display disappears)
   - *Round to whole degrees* — sends X.0 instead of X.Y
   - *Verbose logging* — one log line per frame
+  - *Keep updating under full CPU load* (on by default) — runs the app at
+    above-normal priority and opts it out of Windows 11's efficiency mode, so
+    the case display doesn't blank and the dashboard doesn't freeze during
+    stress tests or shader compilation. The app uses well under 1% CPU, so
+    this doesn't slow games down. With logging on, any update that still runs
+    late is logged as `Update loop ran … ms late`.
 - **Alerts** — enable, with a cooldown to avoid spam
 - **Logging** — write events to a file (auto-rotates at 5 MB, keeps one
   backup as `name.log.1`)
 - **Appearance and startup** — Light / Dark / System theme, start with
   Windows (HKCU `Run` key), start minimised
 
+- **Dashboard window** — see [Dashboard](#dashboard) below
+
 ### Tray menu
 
 - **Open settings…** (left-click does the same)
+- **Show / hide dashboard**
 - **Pause / Resume** — stops or restarts the worker without quitting (the
   display will keep showing the last frame until the firmware times it out)
 - **Quit**
+
+### Dashboard
+
+An optional window that shows whichever HWiNFO readings you choose — handy on
+a second monitor to keep an eye on temperatures, clocks, power and
+utilisation while gaming. Each tile shows the current value and unit, the
+lowest/highest value HWiNFO has recorded, a sparkline of recent history, and
+(optionally) a bar. Tiles turn amber or red when a reading reaches the
+thresholds you set.
+
+To set it up, open settings → **Dashboard window**:
+
+1. Pick a device (e.g. `GPU [#0]: NVIDIA GeForce RTX 4080`) and a reading
+   (e.g. `GPU Temperature`), then click **Add**. Repeat for each tile you want.
+2. Edit a row in the table to change the tile's caption, decimal places,
+   *Amber at* / *Red at* thresholds, or *Bar max* (the bar's full-scale
+   value; blank hides the bar). Temperatures default to 80 / 90 with a
+   0–100 bar; usage readings get a 0–100 bar.
+3. Tick **Show dashboard**.
+
+Changes in this section show on the dashboard straight away as a preview,
+like the theme picker. **Apply** or **Save & Close** keeps them; **Cancel**
+(or closing the settings window) puts the dashboard back how it was.
+
+In the dashboard window: drag anywhere to move it, double-click or press
+**F11** to maximise it (fills the whole monitor when borderless), and
+right-click for *Always on top*, *Borderless*, *Settings…* and *Close*. The
+layout picks a column count that suits the window shape (or set a fixed
+count in settings), and text scales with the tile size. Position, size and
+maximised state are remembered, so it reopens on the same monitor. If it was
+open when you quit, it reopens next launch.
+
+It's designed to be light enough to leave running next to a game: it reuses
+the app's single HWiNFO poll (no extra polling), updates at the configured
+refresh interval, only touches text that actually changed, draws each
+sparkline as one precomputed shape, and uses no transparency, blur, shadows
+or animations. When minimised it only records history. For even less work,
+raise the refresh interval.
+
+Readings are matched by HWiNFO's original device and reading names, so
+renaming a sensor inside HWiNFO doesn't break a tile.
 
 ### Picking the right CPU/GPU sensor
 

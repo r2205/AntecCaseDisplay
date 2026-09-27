@@ -42,6 +42,120 @@ public sealed class SlotConfig
     public double? AlertThreshold { get; set; }
 }
 
+/// <summary>One tile on the dashboard: a single HWiNFO reading.</summary>
+public sealed class DashboardItem
+{
+    [JsonPropertyName("sensorType")]
+    public HwInfoReader.SensorType SensorType { get; set; } = HwInfoReader.SensorType.Temperature;
+
+    /// <summary>HWiNFO's original device name, e.g. "CPU [#0]: AMD Ryzen 7 7800X3D: Enhanced".</summary>
+    [JsonPropertyName("sensor")]
+    public string SensorName { get; set; } = "";
+
+    /// <summary>HWiNFO's original reading label, e.g. "CPU (Tctl/Tdie)". Exact match.</summary>
+    [JsonPropertyName("reading")]
+    public string ReadingName { get; set; } = "";
+
+    /// <summary>Caption shown on the tile.</summary>
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = "";
+
+    [JsonPropertyName("decimals")]
+    public int Decimals { get; set; } = 0;
+
+    /// <summary>Tile turns amber at or above this value; null disables.</summary>
+    [JsonPropertyName("warnAt")]
+    public double? WarnAt { get; set; }
+
+    /// <summary>Tile turns red at or above this value; null disables.</summary>
+    [JsonPropertyName("criticalAt")]
+    public double? CriticalAt { get; set; }
+
+    /// <summary>Full-scale value for the bar under the tile (bar runs from 0);
+    /// null hides the bar.</summary>
+    [JsonPropertyName("barMax")]
+    public double? BarMax { get; set; }
+
+    [JsonIgnore]
+    public string DisplaySource => $"{SensorName} › {ReadingName}";
+
+    public bool Matches(in HwInfoReader.Reading r) =>
+        r.Type == SensorType && r.OriginalName == ReadingName && r.SensorName == SensorName;
+
+    /// <summary>Sensible per-type defaults for a freshly added reading.</summary>
+    public static DashboardItem FromReading(in HwInfoReader.Reading r)
+    {
+        var item = new DashboardItem
+        {
+            SensorType = r.Type,
+            SensorName = r.SensorName,
+            ReadingName = r.OriginalName,
+            Label = r.UserName.Length > 0 ? r.UserName : r.OriginalName,
+            Decimals = r.Type switch
+            {
+                HwInfoReader.SensorType.Voltage => 3,
+                HwInfoReader.SensorType.Current => 2,
+                HwInfoReader.SensorType.Power => 1,
+                _ => 0,
+            },
+        };
+        switch (r.Type)
+        {
+            case HwInfoReader.SensorType.Temperature:
+                item.WarnAt = 80;
+                item.CriticalAt = 90;
+                item.BarMax = 100;
+                break;
+            case HwInfoReader.SensorType.Usage:
+                item.BarMax = 100;
+                break;
+        }
+        return item;
+    }
+}
+
+public sealed class DashboardConfig
+{
+    /// <summary>Show the dashboard window. Toggled from the tray too, so it
+    /// reopens next launch if it was open when the app quit.</summary>
+    [JsonPropertyName("enabled")]
+    public bool Enabled { get; set; } = false;
+
+    [JsonPropertyName("alwaysOnTop")]
+    public bool AlwaysOnTop { get; set; } = false;
+
+    /// <summary>Hide the Windows title bar; drag anywhere to move.</summary>
+    [JsonPropertyName("borderless")]
+    public bool Borderless { get; set; } = true;
+
+    /// <summary>Tile columns; 0 picks a count from the window width.</summary>
+    [JsonPropertyName("columns")]
+    public int Columns { get; set; } = 0;
+
+    /// <summary>How much history the sparkline on each tile covers.</summary>
+    [JsonPropertyName("historySeconds")]
+    public int HistorySeconds { get; set; } = 60;
+
+    // Window placement, remembered across runs so it comes back on the same monitor.
+    [JsonPropertyName("left")]
+    public double? Left { get; set; }
+
+    [JsonPropertyName("top")]
+    public double? Top { get; set; }
+
+    [JsonPropertyName("width")]
+    public double Width { get; set; } = 820;
+
+    [JsonPropertyName("height")]
+    public double Height { get; set; } = 480;
+
+    [JsonPropertyName("maximized")]
+    public bool Maximized { get; set; } = false;
+
+    [JsonPropertyName("items")]
+    public List<DashboardItem> Items { get; set; } = new();
+}
+
 public sealed class Config
 {
     [JsonPropertyName("cpu")]
@@ -64,6 +178,12 @@ public sealed class Config
 
     [JsonPropertyName("updateIntervalMs")]
     public int UpdateIntervalMs { get; set; } = 1000;
+
+    /// <summary>Run at above-normal priority (and opt out of Windows'
+    /// efficiency mode) so the display and dashboard keep updating when a
+    /// game or stress test saturates every core.</summary>
+    [JsonPropertyName("highPriority")]
+    public bool HighPriority { get; set; } = true;
 
     [JsonPropertyName("reconnectIntervalMs")]
     public int ReconnectIntervalMs { get; set; } = 5000;
@@ -100,6 +220,9 @@ public sealed class Config
     [JsonPropertyName("verbose")]
     public bool Verbose { get; set; } = false;
 
+    [JsonPropertyName("dashboard")]
+    public DashboardConfig Dashboard { get; set; } = new();
+
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true,
@@ -123,6 +246,10 @@ public sealed class Config
         var json = File.ReadAllText(path);
         var loaded = JsonSerializer.Deserialize<Config>(json, SerializerOptions)
                      ?? throw new InvalidDataException($"Failed to parse {path}");
+
+        // Hand-edited files may null these out.
+        loaded.Dashboard ??= new DashboardConfig();
+        loaded.Dashboard.Items ??= new List<DashboardItem>();
 
         // Migrate the v1 flat schema (cpuSensorPattern / gpuSensorPattern) so
         // upgrading from the CLI build doesn't lose user-tuned regexes.

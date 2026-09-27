@@ -53,7 +53,9 @@
 
         <!-- main scrollable settings area -->
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel>
+            <!-- ModernWpf draws the scroll bar over the content; keep the
+                 group boxes' right edge clear of it. -->
+            <StackPanel Margin="0,0,16,0">
 
                 <!-- CPU slot -->
                 <GroupBox Header="CPU display slot">
@@ -143,6 +145,96 @@
                     </Grid>
                 </GroupBox>
 
+                <!-- Dashboard -->
+                <GroupBox Header="Dashboard window">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource HintText}" Margin="0,0,0,6"
+                                   Text="A live view of any HWiNFO readings, e.g. on a second monitor while gaming. Drag to move, double-click or F11 to maximise, right-click for options. Also toggled from the tray menu. Changes here show on the dashboard straight away; Apply or Save to keep them, Cancel to undo."/>
+
+                        <WrapPanel>
+                            <CheckBox x:Name="DashEnabledCheck" Content="Show dashboard" Margin="0,3,24,3"
+                                      Checked="OnDashSettingChanged" Unchecked="OnDashSettingChanged"/>
+                            <CheckBox x:Name="DashTopmostCheck" Content="Always on top" Margin="0,3,24,3"
+                                      Checked="OnDashSettingChanged" Unchecked="OnDashSettingChanged"/>
+                            <CheckBox x:Name="DashBorderlessCheck" Content="Borderless" Margin="0,3,24,3"
+                                      Checked="OnDashSettingChanged" Unchecked="OnDashSettingChanged"/>
+                        </WrapPanel>
+
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Label Grid.Row="0" Grid.Column="0" Content="Columns:"/>
+                            <ComboBox Grid.Row="0" Grid.Column="1" x:Name="DashColumnsCombo" Margin="0,2"
+                                      SelectionChanged="OnDashSettingChanged"/>
+
+                            <Label Grid.Row="1" Grid.Column="0" Content="Chart history:"/>
+                            <ComboBox Grid.Row="1" Grid.Column="1" x:Name="DashHistoryCombo" Margin="0,2"
+                                      SelectionChanged="OnDashSettingChanged"/>
+                        </Grid>
+
+                        <TextBlock Text="Add a reading" FontWeight="SemiBold" Margin="0,12,0,4"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox Grid.Column="0" x:Name="DashDeviceCombo" Margin="0,0,6,0"
+                                      HorizontalAlignment="Stretch"
+                                      ToolTip="HWiNFO sensor (device)"
+                                      SelectionChanged="OnDashDeviceChanged"/>
+                            <ComboBox Grid.Column="1" x:Name="DashReadingCombo"
+                                      HorizontalAlignment="Stretch"
+                                      ToolTip="Reading to add as a tile">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock>
+                                            <Run Text="{Binding OriginalName, Mode=OneWay}"/><Run
+                                                 Text="{Binding Unit, Mode=OneWay, StringFormat='  {0}'}"
+                                                 Foreground="{DynamicResource MutedForegroundBrush}"/>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Button Grid.Column="2" Content="Add" Click="OnDashAddClicked"/>
+                        </Grid>
+
+                        <DataGrid x:Name="DashItemsGrid" Margin="0,8,0,0" MaxHeight="300" MinHeight="80"
+                                  CellEditEnding="OnDashCellEditEnding"
+                                  AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                  CanUserSortColumns="False" CanUserReorderColumns="False"
+                                  CanUserResizeRows="False" HeadersVisibility="Column"
+                                  SelectionMode="Single" SelectionUnit="FullRow">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="130"/>
+                                <DataGridTextColumn Header="Reading" Binding="{Binding DisplaySource, Mode=OneWay}"
+                                                    IsReadOnly="True" Width="*"/>
+                                <DataGridTextColumn Header="Decimals" Binding="{Binding Decimals}" Width="80"/>
+                                <DataGridTextColumn Header="Amber at" Binding="{Binding WarnAt, TargetNullValue=''}" Width="80"/>
+                                <DataGridTextColumn Header="Red at" Binding="{Binding CriticalAt, TargetNullValue=''}" Width="70"/>
+                                <DataGridTextColumn Header="Bar max" Binding="{Binding BarMax, TargetNullValue=''}" Width="75"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DockPanel Margin="0,6,0,0">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Content="Move up" Click="OnDashMoveUpClicked"/>
+                                <Button Content="Move down" Click="OnDashMoveDownClicked"/>
+                                <Button Content="Remove" Click="OnDashRemoveClicked"/>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="0,0,8,0"
+                                       Text="Double-click a cell to edit. Tiles turn amber / red at or above the thresholds (blank = off). Bar max sets the full-scale value of the bar under the tile (blank hides it)."/>
+                        </DockPanel>
+                    </StackPanel>
+                </GroupBox>
+
                 <!-- Refresh / general -->
                 <GroupBox Header="Update behaviour">
                     <Grid>
@@ -152,6 +244,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -178,6 +271,13 @@
                         <CheckBox Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3"
                                   x:Name="VerboseCheck" Margin="0,4,0,0"
                                   Content="Verbose logging (per-frame log lines)"/>
+
+                        <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,4,0,0">
+                            <CheckBox x:Name="HighPriorityCheck"
+                                      Content="Keep updating under full CPU load (above-normal priority)"/>
+                            <TextBlock Style="{StaticResource HintText}"
+                                       Text="Stops the case display blanking and the dashboard freezing during stress tests or shader compilation. The app uses well under 1% CPU, so games aren't affected."/>
+                        </StackPanel>
                     </Grid>
                 </GroupBox>
 

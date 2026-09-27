@@ -61,7 +61,11 @@ public sealed class MonitorService : IDisposable
             if (_runTask is { IsCompleted: false }) return;
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
-            _runTask = Task.Run(() => RunAsync(token), token);
+            // A dedicated thread rather than the thread pool, so it can run
+            // at raised priority (see ProcessPriorityService) and keeps
+            // sending frames when every core is pinned.
+            _runTask = Task.Factory.StartNew(() => Run(token), token,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
     }
 
@@ -83,30 +87,36 @@ public sealed class MonitorService : IDisposable
         }
     }
 
-    private async Task RunAsync(CancellationToken token)
+    private void Run(CancellationToken token)
     {
         using var hw = new HwInfoReader();
         using var display = new AntecDisplay();
-        string? lastError = null;
+        var nextDisplayAttempt = DateTime.MinValue;
+        var sinceLastTick = Stopwatch.StartNew();
+        var expectedGapMs = 0;
 
         while (!token.IsCancellationRequested)
         {
             Config cfg;
             lock (_lock) { cfg = _config; }
 
+            var priority = cfg.HighPriority ? ThreadPriority.Highest : ThreadPriority.Normal;
+            if (Thread.CurrentThread.Priority != priority) Thread.CurrentThread.Priority = priority;
+
+            // Leave a trail for "display blanked / dashboard froze" reports:
+            // a late tick means we weren't scheduled (CPU starved).
+            var gapMs = sinceLastTick.ElapsedMilliseconds;
+            if (expectedGapMs > 0 && gapMs > expectedGapMs + 2000)
+            {
+                Log?.Invoke($"Update loop ran {gapMs - expectedGapMs} ms late (CPU starved?).");
+            }
+            sinceLastTick.Restart();
+
             if (!hw.IsOpen && !hw.TryOpen())
             {
-                lastError = "HWiNFO shared memory not available. Is HWiNFO64 running with 'Shared Memory Support' enabled?";
-                EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
-                await Delay(cfg.ReconnectIntervalMs, token);
-                continue;
-            }
-
-            if (!display.IsOpen && !display.TryOpen())
-            {
-                lastError = $"Antec Flux Pro display not found (VID=0x{AntecDisplay.VendorId:X4}, PID=0x{AntecDisplay.ProductId:X4}).";
-                EmitStatus(true, false, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
-                await Delay(cfg.ReconnectIntervalMs, token);
+                EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(),
+                    "HWiNFO shared memory not available. Is HWiNFO64 running with 'Shared Memory Support' enabled?");
+                expectedGapMs = Wait(cfg.ReconnectIntervalMs, token);
                 continue;
             }
 
@@ -117,33 +127,46 @@ public sealed class MonitorService : IDisposable
             }
             catch (Exception ex)
             {
-                lastError = $"HWiNFO read failed: {ex.Message}";
-                Log?.Invoke(lastError);
+                var error = $"HWiNFO read failed: {ex.Message}";
+                Log?.Invoke(error);
                 hw.Close();
-                EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), lastError);
-                await Delay(cfg.ReconnectIntervalMs, token);
+                EmitStatus(false, display.IsOpen, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<HwInfoReader.Reading>(), error);
+                expectedGapMs = Wait(cfg.ReconnectIntervalMs, token);
                 continue;
             }
 
             var cpu = SensorResolver.Resolve(cfg.Cpu, readings);
             var gpu = SensorResolver.Resolve(cfg.Gpu, readings);
+            string? lastError = null;
 
-            var cpuToSend = ApplyDisplayRounding(cpu.Value, cfg.IntegerTemperatures);
-            var gpuToSend = ApplyDisplayRounding(gpu.Value, cfg.IntegerTemperatures);
-
-            try
+            // The case display is optional for everything else that consumes
+            // readings (dashboard, alerts, tray tooltip), so keep polling HWiNFO
+            // while it's missing and only retry the HID enumeration every
+            // reconnect interval.
+            if (!display.IsOpen && DateTime.UtcNow >= nextDisplayAttempt && !display.TryOpen())
             {
-                display.Send(cpuToSend, gpuToSend);
-                lastError = null;
+                nextDisplayAttempt = DateTime.UtcNow.AddMilliseconds(cfg.ReconnectIntervalMs);
             }
-            catch (Exception ex)
+
+            if (display.IsOpen)
             {
-                lastError = $"Display write failed: {ex.Message}";
-                Log?.Invoke(lastError);
-                display.Close();
-                EmitStatus(true, false, cpu.Value, gpu.Value, cpu.MatchedNames, gpu.MatchedNames, readings, lastError);
-                await Delay(cfg.ReconnectIntervalMs, token);
-                continue;
+                try
+                {
+                    display.Send(
+                        ApplyDisplayRounding(cpu.Value, cfg.IntegerTemperatures),
+                        ApplyDisplayRounding(gpu.Value, cfg.IntegerTemperatures));
+                }
+                catch (Exception ex)
+                {
+                    lastError = $"Display write failed: {ex.Message}";
+                    Log?.Invoke(lastError);
+                    display.Close();
+                    nextDisplayAttempt = DateTime.UtcNow.AddMilliseconds(cfg.ReconnectIntervalMs);
+                }
+            }
+            else
+            {
+                lastError = $"Antec Flux Pro display not found (VID=0x{AntecDisplay.VendorId:X4}, PID=0x{AntecDisplay.ProductId:X4}).";
             }
 
             CheckAlerts(cfg, cpu.Value, gpu.Value);
@@ -153,9 +176,9 @@ public sealed class MonitorService : IDisposable
                 Log?.Invoke($"CPU={Format(cpu.Value)} GPU={Format(gpu.Value)} (cpu matches: {string.Join(", ", cpu.MatchedNames)}; gpu matches: {string.Join(", ", gpu.MatchedNames)})");
             }
 
-            EmitStatus(true, true, cpu.Value, gpu.Value, cpu.MatchedNames, gpu.MatchedNames, readings, null);
+            EmitStatus(true, display.IsOpen, cpu.Value, gpu.Value, cpu.MatchedNames, gpu.MatchedNames, readings, lastError);
 
-            await Delay(cfg.UpdateIntervalMs, token);
+            expectedGapMs = Wait(cfg.UpdateIntervalMs, token);
         }
     }
 
@@ -200,10 +223,14 @@ public sealed class MonitorService : IDisposable
         return integer ? Math.Round(value.Value, 0, MidpointRounding.AwayFromZero) : value;
     }
 
-    private static async Task Delay(int ms, CancellationToken ct)
+    /// <summary>Sleeps on this thread (returns early on stop) and returns
+    /// the delay used. Deliberately not Task.Delay: its continuation would
+    /// resume on a normal-priority thread-pool thread.</summary>
+    private static int Wait(int ms, CancellationToken ct)
     {
-        try { await Task.Delay(Math.Max(50, ms), ct); }
-        catch (TaskCanceledException) { /* expected on stop */ }
+        ms = Math.Max(50, ms);
+        ct.WaitHandle.WaitOne(ms);
+        return ms;
     }
 
     private static string Format(double? v) => v is null ? "--" : v.Value.ToString("F1");

@@ -41,6 +41,9 @@ public static class AppCommands
     public static RelayCommand OpenSettingsCommand { get; } =
         new RelayCommand(() => App.Current.ShowSettingsWindow());
 
+    public static RelayCommand ToggleDashboardCommand { get; } =
+        new RelayCommand(() => App.Current.SetDashboardVisible(!App.Current.IsDashboardOpen));
+
     public static RelayCommand PauseResumeCommand { get; } =
         new RelayCommand(() =>
         {
@@ -49,5 +52,5 @@ public static class AppCommands
         });
 
     public static RelayCommand QuitCommand { get; } =
-        new RelayCommand(() => App.Current.Shutdown());
+        new RelayCommand(() => App.Current.Quit());
 }
