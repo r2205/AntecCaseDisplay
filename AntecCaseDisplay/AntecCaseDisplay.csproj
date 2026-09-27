@@ -10,7 +10,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Exe icon; windows without their own Icon use it too. -->
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Tray icon, loaded from the assembly via IconSource in App.xaml. -->
+    <Resource Include="Assets\AppIcon.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="HidSharp" Version="2.1.0" />
