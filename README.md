@@ -53,7 +53,14 @@ dotnet publish AntecCaseDisplay\AntecCaseDisplay.csproj -c Release -r win-x64 `
 
 1. Start HWiNFO64 (and keep it running in the background).
 2. Launch `AntecCaseDisplay.exe`.
-   - On first run a default `appsettings.json` is written next to the exe.
+   - Settings are kept in `%AppData%\AntecCaseDisplay\appsettings.json`
+     (written with defaults on first run), so rebuilding, cleaning or
+     updating the app never resets them. If you used a version that kept
+     `appsettings.json` next to the exe, it's copied over automatically the
+     first time the new version starts.
+   - If the settings file can't be read (e.g. after a hand edit with a typo),
+     it's renamed to `appsettings.json.bad`, a message explains what was
+     wrong, and the app starts with default settings.
    - The app starts minimised to the tray. Click the tray icon (the blue "A")
      to open settings.
 

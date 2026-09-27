@@ -262,8 +262,58 @@ public sealed class Config
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
     };
 
-    public static string DefaultPath =>
-        Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+    /// <summary>Per-user settings folder, %AppData%\AntecCaseDisplay. Kept out
+    /// of the exe folder so rebuilding or cleaning the project can't
+    /// overwrite the user's settings.</summary>
+    public static string SettingsDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AntecCaseDisplay");
+
+    public static string DefaultPath => Path.Combine(SettingsDirectory, "appsettings.json");
+
+    /// <summary>Where settings were kept before they moved to %AppData%.</summary>
+    private static string LegacyPath => Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+
+    /// <summary>Loads <see cref="DefaultPath"/>, first bringing over settings
+    /// left next to the exe by an older version. A file that can't be read
+    /// (bad JSON, a misspelt value, ...) is set aside rather than stopping
+    /// the app from starting.</summary>
+    /// <param name="problem">Why the file was set aside and where it went,
+    /// to show the user; null when it loaded fine.</param>
+    public static Config LoadUserSettings(out string? problem)
+    {
+        problem = null;
+        if (!File.Exists(DefaultPath) && File.Exists(LegacyPath))
+        {
+            // The old file is left where it is; nothing reads it after this.
+            Directory.CreateDirectory(SettingsDirectory);
+            File.Copy(LegacyPath, DefaultPath);
+        }
+
+        try
+        {
+            return Load(DefaultPath);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidDataException)
+        {
+            var keptAs = SetAside(DefaultPath);
+            problem =
+                "Your settings file couldn't be read, so AntecCaseDisplay has started with default settings." +
+                $"{Environment.NewLine}{Environment.NewLine}{ex.Message}{Environment.NewLine}{Environment.NewLine}" +
+                $"The unreadable file was kept as:{Environment.NewLine}{keptAs}{Environment.NewLine}{Environment.NewLine}" +
+                "To get your settings back, fix it and copy it over appsettings.json while the app isn't running.";
+            return Load(DefaultPath); // writes fresh defaults
+        }
+    }
+
+    /// <summary>Renames an unreadable settings file out of the way, without
+    /// overwriting one set aside earlier.</summary>
+    private static string SetAside(string path)
+    {
+        var target = path + ".bad";
+        if (File.Exists(target)) target = $"{path}.{DateTime.Now:yyyyMMdd-HHmmss}.bad";
+        File.Move(path, target);
+        return target;
+    }
 
     public static Config Load(string path)
     {
@@ -316,6 +366,8 @@ public sealed class Config
     public void Save(string path)
     {
         var json = JsonSerializer.Serialize(this, SerializerOptions);
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         File.WriteAllText(path, json);
     }
 

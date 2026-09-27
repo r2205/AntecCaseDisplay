@@ -18,10 +18,4 @@
     <PackageReference Include="ModernWpfUI" Version="0.9.6" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
 </Project>
