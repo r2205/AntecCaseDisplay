@@ -76,7 +76,7 @@ public partial class App : Application
             return;
         }
 
-        _config = Config.Load(Config.DefaultPath);
+        _config = Config.LoadUserSettings();
         ThemeManager.Apply(_config.Theme);
 
         _log = new LogService();

@@ -262,8 +262,29 @@ public sealed class Config
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
     };
 
-    public static string DefaultPath =>
-        Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+    /// <summary>Per-user settings folder, %AppData%\AntecCaseDisplay. Kept out
+    /// of the exe folder so rebuilding or cleaning the project can't
+    /// overwrite the user's settings.</summary>
+    public static string SettingsDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AntecCaseDisplay");
+
+    public static string DefaultPath => Path.Combine(SettingsDirectory, "appsettings.json");
+
+    /// <summary>Where settings were kept before they moved to %AppData%.</summary>
+    private static string LegacyPath => Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+
+    /// <summary>Loads <see cref="DefaultPath"/>, first bringing over settings
+    /// left next to the exe by an older version.</summary>
+    public static Config LoadUserSettings()
+    {
+        if (!File.Exists(DefaultPath) && File.Exists(LegacyPath))
+        {
+            // The old file is left where it is; nothing reads it after this.
+            Directory.CreateDirectory(SettingsDirectory);
+            File.Copy(LegacyPath, DefaultPath);
+        }
+        return Load(DefaultPath);
+    }
 
     public static Config Load(string path)
     {
@@ -316,6 +337,8 @@ public sealed class Config
     public void Save(string path)
     {
         var json = JsonSerializer.Serialize(this, SerializerOptions);
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         File.WriteAllText(path, json);
     }
 
