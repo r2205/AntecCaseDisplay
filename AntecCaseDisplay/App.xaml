@@ -95,19 +95,15 @@
             </Style>
 
             <!-- tray icon resource -->
+            <!-- Assets/AppIcon.ico is drawn by tools/make_icon.py, with a
+                 hand-aligned frame per size so it stays crisp at 16 px. -->
             <tb:TaskbarIcon x:Key="TrayIcon"
                             x:Shared="True"
+                            IconSource="/Assets/AppIcon.ico"
                             ToolTipText="AntecCaseDisplay"
                             Visibility="Visible"
                             NoLeftClickDelay="True"
                             LeftClickCommand="{x:Static local:AppCommands.OpenSettingsCommand}">
-                <tb:TaskbarIcon.IconSource>
-                    <tb:GeneratedIconSource Text="A"
-                                            Foreground="White"
-                                            Background="#FF0078D4"
-                                            FontWeight="Bold"
-                                            FontSize="24"/>
-                </tb:TaskbarIcon.IconSource>
                 <tb:TaskbarIcon.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Open settings…"

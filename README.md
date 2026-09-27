@@ -61,8 +61,8 @@ dotnet publish AntecCaseDisplay\AntecCaseDisplay.csproj -c Release -r win-x64 `
    - If the settings file can't be read (e.g. after a hand edit with a typo),
      it's renamed to `appsettings.json.bad`, a message explains what was
      wrong, and the app starts with default settings.
-   - The app starts minimised to the tray. Click the tray icon (the blue "A")
-     to open settings.
+   - The app starts minimised to the tray. Click the tray icon (an orange
+     thermometer) to open settings.
 
 ### Settings window
 
