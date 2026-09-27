@@ -76,8 +76,12 @@ public partial class App : Application
             return;
         }
 
-        _config = Config.LoadUserSettings();
+        _config = Config.LoadUserSettings(out var settingsProblem);
         ThemeManager.Apply(_config.Theme);
+        if (settingsProblem is not null)
+        {
+            MessageBox.Show(settingsProblem, "AntecCaseDisplay", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
 
         _log = new LogService();
         _log.Configure(_config.LoggingEnabled, _config.LogPath);
