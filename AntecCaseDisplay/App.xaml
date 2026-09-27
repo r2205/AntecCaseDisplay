@@ -1,6 +1,7 @@
 <Application x:Class="AntecCaseDisplay.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
              xmlns:ui="http://schemas.modernwpf.com/2019"
              xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
              xmlns:local="clr-namespace:AntecCaseDisplay"
@@ -53,6 +54,12 @@
                 </ui:ThemeResources>
                 <ui:XamlControlsResources />
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- ModernWpf mirrors Windows' "Always show scrollbars" setting
+                 (off by default) into this key, making scroll bars collapse to
+                 a thin line until hovered. Defining it here takes precedence,
+                 so they stay visible and easy to grab. -->
+            <sys:Boolean x:Key="AutoHideScrollBars">False</sys:Boolean>
 
             <!-- App-wide tweaks on top of ModernWpf's defaults. Text controls
                  pick up Foreground from the theme; ModernWpf handles the rest. -->

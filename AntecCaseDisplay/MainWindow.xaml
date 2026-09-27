@@ -53,7 +53,9 @@
 
         <!-- main scrollable settings area -->
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel>
+            <!-- ModernWpf draws the scroll bar over the content; keep the
+                 group boxes' right edge clear of it. -->
+            <StackPanel Margin="0,0,16,0">
 
                 <!-- CPU slot -->
                 <GroupBox Header="CPU display slot">
