@@ -29,62 +29,76 @@
         <DataTemplate x:Key="TileTemplate" DataType="{x:Type local:DashboardTile}">
             <Border Margin="5" Padding="16,10,16,12" CornerRadius="10"
                     Background="{DynamicResource DashTileBrush}">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*" MinHeight="10"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+                <DockPanel>
+                    <!-- Hardware colour (CPU, GPU, ...), so tiles from the same
+                         device can be told apart at a glance. -->
+                    <Border x:Name="HardwareStrip" DockPanel.Dock="Left"
+                            Width="4" CornerRadius="2" Margin="-6,2,10,2"
+                            Background="{Binding HardwareBrush, Mode=OneTime}"
+                            ToolTip="{Binding HardwareName, Mode=OneTime}"
+                            Visibility="{Binding ShowHardwareStrip, Mode=OneTime, Converter={StaticResource BoolToVisibility}}"/>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*" MinHeight="10"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
 
-                    <DockPanel Grid.Row="0">
-                        <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0"
-                                   Text="{Binding RangeText}"
-                                   ToolTip="Lowest – highest since HWiNFO's counters were last reset"
-                                   Foreground="{DynamicResource MutedForegroundBrush}"
-                                   FontSize="{DynamicResource DashLabelFontSize}"
-                                   Typography.NumeralAlignment="Tabular"/>
-                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"
-                                   ToolTip="{Binding Item.DisplaySource}"
-                                   Foreground="{DynamicResource MutedForegroundBrush}"
-                                   FontSize="{DynamicResource DashLabelFontSize}"
-                                   FontWeight="SemiBold"/>
-                    </DockPanel>
+                        <DockPanel Grid.Row="0">
+                            <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0"
+                                       Text="{Binding RangeText}"
+                                       ToolTip="Lowest – highest since HWiNFO's counters were last reset"
+                                       Foreground="{DynamicResource MutedForegroundBrush}"
+                                       FontSize="{DynamicResource DashLabelFontSize}"
+                                       Typography.NumeralAlignment="Tabular"/>
+                            <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding Item.DisplaySource}"
+                                       Foreground="{DynamicResource MutedForegroundBrush}"
+                                       FontSize="{DynamicResource DashLabelFontSize}"
+                                       FontWeight="SemiBold"/>
+                        </DockPanel>
 
-                    <TextBlock Grid.Row="1" x:Name="ValueText" Margin="0,-2,0,0"
-                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
-                               Typography.NumeralAlignment="Tabular"
-                               Foreground="{DynamicResource ForegroundBrush}">
-                        <Run Text="{Binding ValueText, Mode=OneWay}"
-                             FontSize="{DynamicResource DashValueFontSize}"/><Run
-                             Text="{Binding Unit, Mode=OneWay, StringFormat='&#x2009;{0}'}"
-                             FontSize="{DynamicResource DashLabelFontSize}"
-                             Foreground="{DynamicResource MutedForegroundBrush}"/>
-                    </TextBlock>
+                        <TextBlock Grid.Row="1" x:Name="ValueText" Margin="0,-2,0,0"
+                                   FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                   Typography.NumeralAlignment="Tabular"
+                                   Foreground="{DynamicResource ForegroundBrush}">
+                            <Run Text="{Binding ValueText, Mode=OneWay}"
+                                 FontSize="{DynamicResource DashValueFontSize}"/><Run
+                                 Text="{Binding Unit, Mode=OneWay, StringFormat='&#x2009;{0}'}"
+                                 FontSize="{DynamicResource DashLabelFontSize}"
+                                 Foreground="{DynamicResource MutedForegroundBrush}"/>
+                        </TextBlock>
 
-                    <local:Sparkline Grid.Row="2" x:Name="Spark" Margin="0,4,0,6"
-                                     Samples="{Binding History}"
-                                     Version="{Binding HistoryVersion}"
-                                     FixedMin="{Binding ChartMin, Mode=OneTime}"
-                                     FixedMax="{Binding ChartMax, Mode=OneTime}"
-                                     Stroke="{DynamicResource DashAccentBrush}"/>
+                        <local:Sparkline Grid.Row="2" x:Name="Spark" Margin="0,4,0,6"
+                                         Samples="{Binding History}"
+                                         Version="{Binding HistoryVersion}"
+                                         FixedMin="{Binding ChartMin, Mode=OneTime}"
+                                         FixedMax="{Binding ChartMax, Mode=OneTime}"
+                                         Stroke="{DynamicResource DashAccentBrush}"/>
 
-                    <Grid Grid.Row="3" Height="4"
-                          Visibility="{Binding HasBar, Converter={StaticResource BoolToVisibility}}">
-                        <Border CornerRadius="2" Background="{DynamicResource DashTrackBrush}"/>
-                        <Border x:Name="BarFill" CornerRadius="2"
-                                Background="{DynamicResource DashAccentBrush}"
-                                RenderTransformOrigin="0,0.5">
-                            <!-- RenderTransform, not Width: moving the bar never re-runs layout. -->
-                            <Border.RenderTransform>
-                                <ScaleTransform ScaleX="{Binding BarFraction}"/>
-                            </Border.RenderTransform>
-                        </Border>
+                        <Grid Grid.Row="3" Height="4"
+                              Visibility="{Binding HasBar, Converter={StaticResource BoolToVisibility}}">
+                            <Border CornerRadius="2" Background="{DynamicResource DashTrackBrush}"/>
+                            <Border x:Name="BarFill" CornerRadius="2"
+                                    Background="{DynamicResource DashAccentBrush}"
+                                    RenderTransformOrigin="0,0.5">
+                                <!-- RenderTransform, not Width: moving the bar never re-runs layout. -->
+                                <Border.RenderTransform>
+                                    <ScaleTransform ScaleX="{Binding BarFraction}"/>
+                                </Border.RenderTransform>
+                            </Border>
+                        </Grid>
                     </Grid>
-                </Grid>
+                </DockPanel>
             </Border>
 
             <DataTemplate.Triggers>
+                <!-- Listed first so the alert / missing triggers below win over it. -->
+                <DataTrigger Binding="{Binding ColorChartByHardware, Mode=OneTime}" Value="True">
+                    <Setter TargetName="Spark" Property="Stroke" Value="{Binding HardwareBrush, Mode=OneTime}"/>
+                    <Setter TargetName="BarFill" Property="Background" Value="{Binding HardwareBrush, Mode=OneTime}"/>
+                </DataTrigger>
                 <DataTrigger Binding="{Binding State}" Value="{x:Static local:TileState.Warning}">
                     <Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource DashWarnBrush}"/>
                     <Setter TargetName="Spark" Property="Stroke" Value="{DynamicResource DashWarnBrush}"/>
@@ -98,6 +112,7 @@
                 <DataTrigger Binding="{Binding State}" Value="{x:Static local:TileState.Missing}">
                     <Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource MutedForegroundBrush}"/>
                     <Setter TargetName="Spark" Property="Stroke" Value="{DynamicResource MutedForegroundBrush}"/>
+                    <Setter TargetName="HardwareStrip" Property="Opacity" Value="0.35"/>
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>

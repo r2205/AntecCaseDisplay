@@ -76,6 +76,23 @@ public sealed class DashboardItem
     [JsonPropertyName("barMax")]
     public double? BarMax { get; set; }
 
+    /// <summary>Hardware the tile is coloured as; Auto guesses from the
+    /// device name.</summary>
+    [JsonPropertyName("hardware")]
+    public HardwareCategory Hardware { get; set; } = HardwareCategory.Auto;
+
+    [JsonIgnore]
+    public HardwareCategory ResolvedHardware =>
+        Hardware == HardwareCategory.Auto ? HardwareCategories.Detect(SensorName)
+        : Enum.IsDefined(Hardware) ? Hardware
+        : HardwareCategory.Other; // out-of-range number in a hand-edited file
+
+    /// <summary>Settings-table text, e.g. "GPU" or "GPU (auto)".</summary>
+    [JsonIgnore]
+    public string HardwareDisplay => Hardware == HardwareCategory.Auto
+        ? $"{HardwareCategories.DisplayName(ResolvedHardware)} (auto)"
+        : HardwareCategories.DisplayName(Hardware);
+
     [JsonIgnore]
     public string DisplaySource => $"{SensorName} › {ReadingName}";
 
@@ -135,6 +152,20 @@ public sealed class DashboardConfig
     /// <summary>How much history the sparkline on each tile covers.</summary>
     [JsonPropertyName("historySeconds")]
     public int HistorySeconds { get; set; } = 60;
+
+    /// <summary>Colour tiles by the hardware they belong to (CPU, GPU, ...).</summary>
+    [JsonPropertyName("hardwareColorMode")]
+    public HardwareColorMode HardwareColorMode { get; set; } = HardwareColorMode.Full;
+
+    /// <summary>"#RRGGBB" per hardware category; missing or unparseable
+    /// entries fall back to the defaults.</summary>
+    [JsonPropertyName("hardwareColors")]
+    public Dictionary<HardwareCategory, string> HardwareColors { get; set; } = HardwareCategories.DefaultColors();
+
+    public string ColorFor(HardwareCategory c) =>
+        HardwareColors.TryGetValue(c, out var hex) && HardwareCategories.TryParseColor(hex, out _)
+            ? hex
+            : HardwareCategories.DefaultColor(c);
 
     // Window placement, remembered across runs so it comes back on the same monitor.
     [JsonPropertyName("left")]
@@ -250,6 +281,7 @@ public sealed class Config
         // Hand-edited files may null these out.
         loaded.Dashboard ??= new DashboardConfig();
         loaded.Dashboard.Items ??= new List<DashboardItem>();
+        loaded.Dashboard.HardwareColors ??= HardwareCategories.DefaultColors();
 
         // Migrate the v1 flat schema (cpuSensorPattern / gpuSensorPattern) so
         // upgrading from the CLI build doesn't lose user-tuned regexes.

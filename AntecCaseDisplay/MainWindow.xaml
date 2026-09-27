@@ -168,6 +168,8 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
                             <Label Grid.Row="0" Grid.Column="0" Content="Columns:"/>
@@ -177,6 +179,45 @@
                             <Label Grid.Row="1" Grid.Column="0" Content="Chart history:"/>
                             <ComboBox Grid.Row="1" Grid.Column="1" x:Name="DashHistoryCombo" Margin="0,2"
                                       SelectionChanged="OnDashSettingChanged"/>
+
+                            <Label Grid.Row="2" Grid.Column="0" Content="Hardware colours:"/>
+                            <ComboBox Grid.Row="2" Grid.Column="1" x:Name="DashColorModeCombo" Margin="0,2"
+                                      SelectionChanged="OnDashColorModeChanged"/>
+
+                            <StackPanel Grid.Row="3" Grid.Column="1" x:Name="DashColorsPanel" Margin="0,4,0,0">
+                                <ItemsControl x:Name="DashHardwareColorsHost" Focusable="False">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type local:HardwareColorChoice}">
+                                            <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
+                                                <TextBlock Text="{Binding Name}" Width="86" VerticalAlignment="Center"/>
+                                                <ComboBox Width="136" ItemsSource="{Binding Swatches}"
+                                                          SelectedItem="{Binding Selected, Mode=OneTime}"
+                                                          SelectionChanged="OnDashColorPicked">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type local:ColorSwatch}">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Border Width="14" Height="14" CornerRadius="3" Margin="0,0,8,0"
+                                                                        VerticalAlignment="Center" Background="{Binding Brush}"/>
+                                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <DockPanel Margin="0,4,0,0">
+                                    <Button DockPanel.Dock="Right" Content="Default colours" Click="OnDashResetColorsClicked"/>
+                                    <TextBlock Style="{StaticResource HintText}" VerticalAlignment="Center"
+                                               Text="Each tile gets a coloured strip for the hardware it belongs to (and, if chosen, a matching chart and bar). Amber and red still show when a threshold is reached. Set a tile's hardware in the table below if the automatic guess is wrong."/>
+                                </DockPanel>
+                            </StackPanel>
                         </Grid>
 
                         <TextBlock Text="Add a reading" FontWeight="SemiBold" Margin="0,12,0,4"/>
@@ -216,6 +257,24 @@
                                 <DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="130"/>
                                 <DataGridTextColumn Header="Reading" Binding="{Binding DisplaySource, Mode=OneWay}"
                                                     IsReadOnly="True" Width="*"/>
+                                <DataGridTemplateColumn Header="Hardware" Width="110">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate DataType="{x:Type local:DashboardItem}">
+                                            <TextBlock Text="{Binding HardwareDisplay, Mode=OneWay}" Margin="12,0"
+                                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate DataType="{x:Type local:DashboardItem}">
+                                            <ComboBox ItemsSource="{x:Static local:MainWindow.HardwareChoices}"
+                                                      DisplayMemberPath="Name" SelectedValuePath="Value"
+                                                      SelectedValue="{Binding Hardware}"
+                                                      HorizontalAlignment="Stretch"
+                                                      Loaded="OnDashHardwareComboLoaded"
+                                                      SelectionChanged="OnDashHardwarePicked"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="Decimals" Binding="{Binding Decimals}" Width="80"/>
                                 <DataGridTextColumn Header="Amber at" Binding="{Binding WarnAt, TargetNullValue=''}" Width="80"/>
                                 <DataGridTextColumn Header="Red at" Binding="{Binding CriticalAt, TargetNullValue=''}" Width="70"/>
@@ -230,7 +289,7 @@
                                 <Button Content="Remove" Click="OnDashRemoveClicked"/>
                             </StackPanel>
                             <TextBlock Style="{StaticResource HintText}" VerticalAlignment="Center" Margin="0,0,8,0"
-                                       Text="Double-click a cell to edit. Tiles turn amber / red at or above the thresholds (blank = off). Bar max sets the full-scale value of the bar under the tile (blank hides it)."/>
+                                       Text="Double-click a cell to edit. Hardware picks the tile's colour (Auto guesses from the device name). Tiles turn amber / red at or above the thresholds (blank = off). Bar max sets the full-scale value of the bar under the tile (blank hides it)."/>
                         </DockPanel>
                     </StackPanel>
                 </GroupBox>
