@@ -128,9 +128,10 @@ To set it up, open settings → **Dashboard window**:
 Tiles are colour-coded by the hardware they belong to — CPU, GPU,
 Motherboard, Memory, Storage, Network or Other — so readings from different
 devices are easy to tell apart. The hardware is worked out from HWiNFO's
-device name (`CPU [#0]: …`, `GPU [#0]: …`, `S.M.A.R.T.: …`, the board's
-Super I/O chip, …); if a guess is wrong, double-click the tile's
-**Hardware** cell in the table and pick the right one. Under
+device name (`CPU [#0]: …`, `GPU [#0]: …` or `dGPU [#0]: …`,
+`S.M.A.R.T.: …`, the board's Super I/O chip, …); if a guess is wrong,
+double-click the tile's **Hardware** cell in the table and pick the right
+one. Under
 **Hardware colours** choose how much colour to use (*Off*, a *Colour strip*
 down the tile's edge, or *Colour strip, chart and bar*) and pick a colour for
 each kind of hardware; **Default colours** puts them back. Amber / red

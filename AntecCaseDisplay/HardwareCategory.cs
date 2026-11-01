@@ -97,9 +97,13 @@ public static class HardwareCategories
     // "Drive: ...", "Network: Intel(R) Ethernet ...", "DDR5 DIMM [#0] ...",
     // "Memory Timings", "System: ASUS ...", or a board named after its
     // Super I/O chip, "ASUS ROG STRIX X670E-E (Nuvoton NCT6799D)".
+    // Newer HWiNFO versions tag graphics cards "dGPU [#0]: ..." (discrete)
+    // or "iGPU [#0]: ..." (integrated) instead of plain "GPU [#0]: ...".
+    // The GPU rule goes first so a card's own sensors (an "EC" on the card,
+    // say) aren't mistaken for the motherboard's.
     private static readonly (Regex Pattern, HardwareCategory Category)[] Rules =
     {
-        (Rx(@"^GPU\b"), HardwareCategory.Gpu),
+        (Rx(@"^[a-z]?GPU\b"), HardwareCategory.Gpu),
         (Rx(@"^CPU\b"), HardwareCategory.Cpu),
         (Rx(@"^(S\.M\.A\.R\.T\.|Drive\b)|\b(SSD|NVMe|HDD)\b"), HardwareCategory.Storage),
         (Rx(@"^Network\b"), HardwareCategory.Network),
