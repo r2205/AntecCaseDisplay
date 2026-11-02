@@ -1,6 +1,6 @@
 using HidSharp;
 
-namespace AntecCaseDisplay;
+namespace Casember;
 
 /// <summary>
 /// Sends CPU/GPU temperature frames to the Antec Flux Pro case LCD over USB HID.

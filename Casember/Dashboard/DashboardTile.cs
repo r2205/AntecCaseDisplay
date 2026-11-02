@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 
-namespace AntecCaseDisplay.Dashboard;
+namespace Casember.Dashboard;
 
 public enum TileState
 {

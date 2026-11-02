@@ -1,7 +1,7 @@
 """Draws the tray/app icon: a white thermometer, centred, on an orange rounded square.
 
 Usage (needs Pillow: pip install pillow):
-    python tools/make_icon.py AntecCaseDisplay/Assets/AppIcon.ico
+    python tools/make_icon.py Casember/Assets/AppIcon.ico
 
 Shapes are laid out on a 32-unit grid with even coordinates, so at 16 px every
 edge lands on a pixel boundary and the icon stays crisp in the tray.

@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using Microsoft.Win32;
 
-namespace AntecCaseDisplay.Services;
+namespace Casember.Services;
 
 /// <summary>
 /// Per-user auto-start using HKCU\Software\Microsoft\Windows\CurrentVersion\Run.
@@ -12,7 +12,21 @@ namespace AntecCaseDisplay.Services;
 public static class AutoStartService
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string ValueName = "AntecCaseDisplay";
+    private const string ValueName = "Casember";
+
+    /// <summary>The value's name from when the app was called AntecCaseDisplay.</summary>
+    private const string LegacyValueName = "AntecCaseDisplay";
+
+    /// <summary>Moves a start-with-Windows entry left by AntecCaseDisplay over
+    /// to this exe. Left alone, it would keep launching the old exe and the
+    /// settings checkbox would show unticked.</summary>
+    public static void MigrateLegacyEntry()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+        if (key?.GetValue(LegacyValueName) is null) return;
+        key.DeleteValue(LegacyValueName, throwOnMissingValue: false);
+        key.SetValue(ValueName, $"\"{NormalizedExePath()}\"", RegistryValueKind.String);
+    }
 
     public static bool IsEnabled()
     {

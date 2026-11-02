@@ -4,8 +4,8 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
-    <RootNamespace>AntecCaseDisplay</RootNamespace>
-    <AssemblyName>AntecCaseDisplay</AssemblyName>
+    <RootNamespace>Casember</RootNamespace>
+    <AssemblyName>Casember</AssemblyName>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>

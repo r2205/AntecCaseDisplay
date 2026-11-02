@@ -1,8 +1,11 @@
-# AntecCaseDisplay
+# Casember
 
 A Windows tray app that drives the CPU/GPU temperature LCD on the **Antec Flux
 Pro** case, reading the temperatures from **HWiNFO64** via its shared memory
 interface. Replacement for Antec's iUnity software.
+
+Casember was previously called AntecCaseDisplay. See
+[Upgrading from AntecCaseDisplay](#upgrading-from-anteccasedisplay).
 
 ## Features
 
@@ -40,20 +43,20 @@ If you just want the simple no-GUI version, check out the `v1.0-cli` tag
 dotnet build -c Release
 ```
 
-The output exe is in `AntecCaseDisplay\bin\Release\net8.0-windows\`.
+The output exe is in `Casember\bin\Release\net8.0-windows\`.
 
 To produce a single self-contained exe:
 
 ```powershell
-dotnet publish AntecCaseDisplay\AntecCaseDisplay.csproj -c Release -r win-x64 `
+dotnet publish Casember\Casember.csproj -c Release -r win-x64 `
   --self-contained true /p:PublishSingleFile=true
 ```
 
 ## Run
 
 1. Start HWiNFO64 (and keep it running in the background).
-2. Launch `AntecCaseDisplay.exe`.
-   - Settings are kept in `%AppData%\AntecCaseDisplay\appsettings.json`
+2. Launch `Casember.exe`.
+   - Settings are kept in `%AppData%\Casember\appsettings.json`
      (written with defaults on first run), so rebuilding, cleaning or
      updating the app never resets them. If you used a version that kept
      `appsettings.json` next to the exe, it's copied over automatically the
@@ -63,6 +66,22 @@ dotnet publish AntecCaseDisplay\AntecCaseDisplay.csproj -c Release -r win-x64 `
      wrong, and the app starts with default settings.
    - The app starts minimised to the tray. Click the tray icon (an orange
      thermometer) to open settings.
+
+### Upgrading from AntecCaseDisplay
+
+Quit AntecCaseDisplay from its tray icon, then start `Casember.exe`. (If the
+old app is still running, Casember says so and doesn't start, so the two
+don't fight over the display.) The first time it starts, Casember:
+
+- copies your settings from `%AppData%\AntecCaseDisplay\` to
+  `%AppData%\Casember\`. The old folder is left alone, so you can delete it
+  once you're happy.
+- moves the start-with-Windows entry over to `Casember.exe`, if you had it
+  turned on.
+- switches logging to `casember.log`, if you were using the default
+  `antec-display.log`. The old log file is left where it is.
+
+You can then delete the old `AntecCaseDisplay.exe`.
 
 ### Settings window
 
@@ -171,7 +190,7 @@ sensors and average them, edit the regex by hand, e.g. `^Core \d+`.
 
 HWiNFO64 is often run as administrator (required for some sensors). Shared
 memory created by an elevated process is not visible to an unelevated reader.
-If the status bar shows `HWiNFO: not connected`, run AntecCaseDisplay as
+If the status bar shows `HWiNFO: not connected`, run Casember as
 administrator too — or start HWiNFO64 unelevated.
 
 ## Display protocol notes

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace AntecCaseDisplay.Services;
+namespace Casember.Services;
 
 /// <summary>
 /// Resolves a SlotConfig against a snapshot of HWiNFO readings: filters by

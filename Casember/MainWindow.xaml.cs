@@ -3,10 +3,10 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
-using AntecCaseDisplay.Services;
+using Casember.Services;
 using Microsoft.Win32;
 
-namespace AntecCaseDisplay;
+namespace Casember;
 
 public partial class MainWindow : Window
 {
@@ -448,7 +448,7 @@ public partial class MainWindow : Window
         var dlg = new SaveFileDialog
         {
             Filter = "Log files (*.log)|*.log|All files (*.*)|*.*",
-            FileName = string.IsNullOrWhiteSpace(LogPathBox.Text) ? "antec-display.log" : LogPathBox.Text,
+            FileName = string.IsNullOrWhiteSpace(LogPathBox.Text) ? Config.DefaultLogPath : LogPathBox.Text,
             OverwritePrompt = false,
         };
         if (dlg.ShowDialog(this) == true) LogPathBox.Text = dlg.FileName;

@@ -3,17 +3,20 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
-using AntecCaseDisplay.Dashboard;
-using AntecCaseDisplay.Services;
+using Casember.Dashboard;
+using Casember.Services;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 
-namespace AntecCaseDisplay;
+namespace Casember;
 
 public partial class App : Application
 {
     // Per-user (no "Global\" prefix) so we don't need admin to create it.
-    private const string SingleInstanceMutexName = "AntecCaseDisplay.SingleInstance.A1F4D2";
+    private const string SingleInstanceMutexName = "Casember.SingleInstance.A1F4D2";
+
+    /// <summary>Held by versions from when the app was called AntecCaseDisplay.</summary>
+    private const string LegacySingleInstanceMutexName = "AntecCaseDisplay.SingleInstance.A1F4D2";
 
     private Mutex? _singleInstanceMutex;
     private TaskbarIcon? _trayIcon;
@@ -67,11 +70,21 @@ public partial class App : Application
             args.SetObserved();
         };
 
+        // An old copy still running would fight this one over the case display.
+        if (Mutex.TryOpenExisting(LegacySingleInstanceMutexName, out var legacyInstance))
+        {
+            legacyInstance.Dispose();
+            MessageBox.Show("The old AntecCaseDisplay app is still running. Quit it from its tray icon, then start Casember again.",
+                "Casember", MessageBoxButton.OK, MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
+
         _singleInstanceMutex = new Mutex(initiallyOwned: false, SingleInstanceMutexName, out var createdNew);
         if (!createdNew)
         {
-            MessageBox.Show("AntecCaseDisplay is already running. Look for the icon in your system tray.",
-                "AntecCaseDisplay", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Casember is already running. Look for the icon in your system tray.",
+                "Casember", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
         }
@@ -80,12 +93,21 @@ public partial class App : Application
         ThemeManager.Apply(_config.Theme);
         if (settingsProblem is not null)
         {
-            MessageBox.Show(settingsProblem, "AntecCaseDisplay", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(settingsProblem, "Casember", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         _log = new LogService();
         _log.Configure(_config.LoggingEnabled, _config.LogPath);
         ProcessPriorityService.Apply(_config.HighPriority, msg => _log?.Write(msg));
+
+        try
+        {
+            AutoStartService.MigrateLegacyEntry();
+        }
+        catch (Exception ex)
+        {
+            _log.Write($"Could not move the start-with-Windows entry over from AntecCaseDisplay: {ex.Message}");
+        }
 
         _monitor = new MonitorService(_config);
         _monitor.Log += msg => _log?.Write(msg);
@@ -144,7 +166,7 @@ public partial class App : Application
             try
             {
                 _trayIcon?.ShowNotification(
-                    title: "AntecCaseDisplay alert",
+                    title: "Casember alert",
                     message: $"{slot} is {value:F0}°C (threshold {threshold:F0}°C)",
                     icon: NotificationIcon.Warning);
             }
@@ -317,7 +339,7 @@ public partial class App : Application
     {
         try
         {
-            var path = Path.Combine(AppContext.BaseDirectory, "antec-display-error.log");
+            var path = Path.Combine(AppContext.BaseDirectory, "casember-error.log");
             File.AppendAllText(path,
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] ({source}) {ex.GetType().FullName}: {ex.Message}{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}");
         }
@@ -326,10 +348,10 @@ public partial class App : Application
         try
         {
             MessageBox.Show(
-                $"AntecCaseDisplay hit an error in the {source}:{Environment.NewLine}{Environment.NewLine}" +
+                $"Casember hit an error in the {source}:{Environment.NewLine}{Environment.NewLine}" +
                 $"{ex.Message}{Environment.NewLine}{Environment.NewLine}" +
-                $"Full details were written to antec-display-error.log next to the exe.",
-                "AntecCaseDisplay error",
+                $"Full details were written to casember-error.log next to the exe.",
+                "Casember error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
         catch { /* if even MessageBox fails, give up */ }

@@ -1,4 +1,4 @@
-namespace AntecCaseDisplay.Dashboard;
+namespace Casember.Dashboard;
 
 /// <summary>
 /// Fixed-capacity ring buffer of samples; NaN marks a gap (reading missing).

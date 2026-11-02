@@ -2,9 +2,9 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shell;
-using AntecCaseDisplay.Services;
+using Casember.Services;
 
-namespace AntecCaseDisplay.Dashboard;
+namespace Casember.Dashboard;
 
 public partial class DashboardWindow : Window
 {

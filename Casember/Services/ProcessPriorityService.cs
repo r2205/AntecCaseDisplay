@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace AntecCaseDisplay.Services;
+namespace Casember.Services;
 
 /// <summary>
 /// Keeps the app responsive when a game or stress test pins every core.
