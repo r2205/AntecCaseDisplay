@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 
-namespace AntecCaseDisplay.Dashboard;
+namespace Casember.Dashboard;
 
 /// <summary>
 /// Minimal line-and-fill history chart. Deliberately does its own drawing in

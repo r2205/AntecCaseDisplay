@@ -2,7 +2,7 @@ using System.Windows;
 using ModernWpf;
 using MwpfThemeManager = ModernWpf.ThemeManager;
 
-namespace AntecCaseDisplay.Services;
+namespace Casember.Services;
 
 public static class ThemeManager
 {

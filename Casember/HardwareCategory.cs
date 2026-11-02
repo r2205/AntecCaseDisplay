@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Windows.Media;
 
-namespace AntecCaseDisplay;
+namespace Casember;
 
 /// <summary>Kind of hardware a dashboard reading belongs to, used to colour
 /// its tile.</summary>

@@ -1,6 +1,6 @@
 using System.Windows.Media;
 
-namespace AntecCaseDisplay;
+namespace Casember;
 
 /// <summary>An entry in the dashboard table's Hardware drop-down.</summary>
 public sealed record HardwareChoice(string Name, HardwareCategory Value);

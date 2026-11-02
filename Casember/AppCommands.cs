@@ -1,6 +1,6 @@
 using System.Windows.Input;
 
-namespace AntecCaseDisplay;
+namespace Casember;
 
 /// <summary>
 /// Lightweight ICommand implementation. RoutedCommand doesn't reliably bubble

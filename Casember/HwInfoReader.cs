@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Unicode;
 
-namespace AntecCaseDisplay;
+namespace Casember;
 
 /// <summary>
 /// Reads sensor readings from HWiNFO64's shared memory region.

@@ -2,7 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace AntecCaseDisplay;
+namespace Casember;
 
 public enum SensorAggregation
 {
@@ -235,8 +235,13 @@ public sealed class Config
     [JsonPropertyName("loggingEnabled")]
     public bool LoggingEnabled { get; set; } = false;
 
+    public const string DefaultLogPath = "casember.log";
+
+    /// <summary>The default log name from when the app was called AntecCaseDisplay.</summary>
+    private const string LegacyDefaultLogPath = "antec-display.log";
+
     [JsonPropertyName("logPath")]
-    public string LogPath { get; set; } = "antec-display.log";
+    public string LogPath { get; set; } = DefaultLogPath;
 
     [JsonPropertyName("theme")]
     public AppTheme Theme { get; set; } = AppTheme.System;
@@ -262,42 +267,59 @@ public sealed class Config
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
     };
 
-    /// <summary>Per-user settings folder, %AppData%\AntecCaseDisplay. Kept out
+    /// <summary>Per-user settings folder, %AppData%\Casember. Kept out
     /// of the exe folder so rebuilding or cleaning the project can't
     /// overwrite the user's settings.</summary>
-    public static string SettingsDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AntecCaseDisplay");
+    public static string SettingsDirectory => AppDataFolder("Casember");
 
     public static string DefaultPath => Path.Combine(SettingsDirectory, "appsettings.json");
 
-    /// <summary>Where settings were kept before they moved to %AppData%.</summary>
-    private static string LegacyPath => Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+    /// <summary>Where older versions kept settings, newest first: the
+    /// %AppData% folder from when the app was called AntecCaseDisplay, and
+    /// before that the exe's own folder.</summary>
+    private static string[] LegacyPaths =>
+    [
+        Path.Combine(AppDataFolder("AntecCaseDisplay"), "appsettings.json"),
+        Path.Combine(AppContext.BaseDirectory, "appsettings.json"),
+    ];
+
+    private static string AppDataFolder(string name) => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), name);
 
     /// <summary>Loads <see cref="DefaultPath"/>, first bringing over settings
-    /// left next to the exe by an older version. A file that can't be read
-    /// (bad JSON, a misspelt value, ...) is set aside rather than stopping
-    /// the app from starting.</summary>
+    /// left by an older version. A file that can't be read (bad JSON, a
+    /// misspelt value, ...) is set aside rather than stopping the app from
+    /// starting.</summary>
     /// <param name="problem">Why the file was set aside and where it went,
     /// to show the user; null when it loaded fine.</param>
     public static Config LoadUserSettings(out string? problem)
     {
         problem = null;
-        if (!File.Exists(DefaultPath) && File.Exists(LegacyPath))
+        var migrated = false;
+        if (!File.Exists(DefaultPath) && LegacyPaths.FirstOrDefault(File.Exists) is { } legacy)
         {
             // The old file is left where it is; nothing reads it after this.
             Directory.CreateDirectory(SettingsDirectory);
-            File.Copy(LegacyPath, DefaultPath);
+            File.Copy(legacy, DefaultPath);
+            migrated = true;
         }
 
         try
         {
-            return Load(DefaultPath);
+            var config = Load(DefaultPath);
+            if (migrated && config.LogPath == LegacyDefaultLogPath)
+            {
+                // Still the old default, so follow the new name.
+                config.LogPath = DefaultLogPath;
+                config.Save(DefaultPath);
+            }
+            return config;
         }
         catch (Exception ex) when (ex is JsonException or InvalidDataException)
         {
             var keptAs = SetAside(DefaultPath);
             problem =
-                "Your settings file couldn't be read, so AntecCaseDisplay has started with default settings." +
+                "Your settings file couldn't be read, so Casember has started with default settings." +
                 $"{Environment.NewLine}{Environment.NewLine}{ex.Message}{Environment.NewLine}{Environment.NewLine}" +
                 $"The unreadable file was kept as:{Environment.NewLine}{keptAs}{Environment.NewLine}{Environment.NewLine}" +
                 "To get your settings back, fix it and copy it over appsettings.json while the app isn't running.";

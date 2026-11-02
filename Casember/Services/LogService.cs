@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace AntecCaseDisplay.Services;
+namespace Casember.Services;
 
 /// <summary>
 /// Tiny append-only log. Thread-safe; rotates at 5 MB by renaming to .1.

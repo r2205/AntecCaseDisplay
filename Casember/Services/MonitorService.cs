@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace AntecCaseDisplay.Services;
+namespace Casember.Services;
 
 /// <summary>
 /// Background worker that polls HWiNFO and drives the Antec display. The GUI
